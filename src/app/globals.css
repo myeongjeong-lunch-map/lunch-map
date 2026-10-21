@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+:root {
+  --brand: #03c75a;
+  --brand-dark: #02a84b;
+  --background: #ffffff;
+  --foreground: #1e1e23;
+  --muted: #767678;
+  --line: #ebebeb;
+  --surface: #f5f6f8;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-surface: var(--surface);
+  --font-sans: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+}
+
+/* 지도 마커 (네이버 지도 HTML 아이콘) */
+.lm-marker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transform: translate(-50%, -100%);
+  padding: 4px 9px 4px 5px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1.5px solid var(--brand);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--foreground);
+  white-space: nowrap;
+  cursor: pointer;
+  position: relative;
+}
+.lm-marker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-bottom: 0;
+  border-top-color: var(--brand);
+}
+.lm-marker .emoji {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #effbf4;
+  font-size: 12px;
+}
+.lm-marker.selected {
+  background: var(--brand);
+  color: #fff;
+  z-index: 10;
+}
+.lm-marker.selected .emoji {
+  background: #fff;
+}
+.lm-marker.campus {
+  border-color: #1e1e23;
+  background: #1e1e23;
+  color: #fff;
+}
+.lm-marker.campus::after {
+  border-top-color: #1e1e23;
+}
+.lm-marker.pick {
+  border-color: #ff5a5a;
+  background: #ff5a5a;
+  color: #fff;
+}
+.lm-marker.pick::after {
+  border-top-color: #ff5a5a;
+}
+
+/* 멀리서 볼 때: 이름표를 숨기고 아이콘만 (선택한 가게와 캠퍼스는 항상 이름 표시) */
+.lm-compact .lm-marker:not(.selected):not(.campus):not(.pick) {
+  padding: 3px;
+  gap: 0;
+}
+.lm-compact .lm-marker:not(.selected):not(.campus):not(.pick) .label {
+  display: none;
+}
+.lm-marker:hover {
+  z-index: 20;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
