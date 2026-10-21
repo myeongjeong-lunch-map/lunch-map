@@ -30,7 +30,7 @@ export function BottomSheet({ snap, onSnap, children }: { snap: SheetSnap; onSna
 
   return (
     <section
-      className="absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-2xl bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.12)]"
+      className="absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-2xl bg-background shadow-[0_-4px_20px_rgba(0,0,0,0.35)]"
       style={{
         height: drag ? `calc(${HEIGHT[snap]} - ${drag}px)` : HEIGHT[snap],
         transition: drag ? "none" : "height 220ms ease",

@@ -14,7 +14,10 @@ export async function PUT(req: NextRequest, ctx: RouteContext<"/api/places/[id]/
       const { error } = await db().from("votes").delete().eq("place_id", id).eq("voter_id", voterId);
       if (error) throw error;
     } else {
-      const { error } = await db().from("votes").upsert({ place_id: id, voter_id: voterId, value }, { onConflict: "place_id,voter_id" });
+      // updated_at: 이번 주 랭킹은 최근 7일 안에 남기거나 바꾼 좋아요만 센다
+      const { error } = await db()
+        .from("votes")
+        .upsert({ place_id: id, voter_id: voterId, value, updated_at: new Date().toISOString() }, { onConflict: "place_id,voter_id" });
       if (error) {
         if (error.code === "23503") throw new HttpError(404, "가게를 찾을 수 없어요.");
         throw error;

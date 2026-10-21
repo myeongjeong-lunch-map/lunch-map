@@ -3,16 +3,16 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { CATEGORIES, SOLO_DINING, SOLO_LABEL, walkingMinutes, type Comment, type Place } from "@/lib/domain";
+import { CATEGORIES, walkingMinutes, type Place, type Tip } from "@/lib/domain";
 
-// 관리자: 가게와 한마디를 수정·삭제하는 유일한 사람
+// 관리자: 가게와 꿀팁을 수정·삭제하는 유일한 사람
 export function AdminPanel() {
   const [admin, setAdmin] = useState<boolean | null>(null);
   const [secret, setSecret] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [tips, setTips] = useState<Tip[]>([]);
 
   const load = useCallback(async () => {
     setPlaces((await api.places()).places);
@@ -44,7 +44,7 @@ export function AdminPanel() {
   const open = async (id: string) => {
     if (openId === id) return setOpenId(null);
     setOpenId(id);
-    setComments((await api.comments(id)).comments);
+    setTips((await api.tips(id)).tips);
   };
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -103,22 +103,11 @@ export function AdminPanel() {
                   <option key={c}>{c}</option>
                 ))}
               </select>
-              <select
-                value={p.solo_dining}
-                onChange={(e) => run(() => api.adminUpdatePlace(p.id, { soloDining: e.target.value }))}
-                className="rounded border border-line px-1.5 py-1 text-sm"
-              >
-                {SOLO_DINING.map((s) => (
-                  <option key={s} value={s}>
-                    {SOLO_LABEL[s]}
-                  </option>
-                ))}
-              </select>
               <button onClick={() => open(p.id)} className="rounded border border-line px-2 py-1 text-sm">
-                💬 {p.comment_count}
+                💡 {p.tip_count}
               </button>
               <button
-                onClick={() => confirm(`"${p.name}"을(를) 삭제할까요? 한마디와 평가도 함께 지워져요.`) && run(() => api.adminDeletePlace(p.id))}
+                onClick={() => confirm(`"${p.name}"을(를) 삭제할까요? 꿀팁, 평가, 키워드도 함께 지워져요.`) && run(() => api.adminDeletePlace(p.id))}
                 className="rounded bg-red-500 px-2 py-1 text-sm font-bold text-white"
               >
                 삭제
@@ -135,18 +124,18 @@ export function AdminPanel() {
             </p>
             {openId === p.id && (
               <ul className="mt-2 space-y-1 rounded-lg bg-surface p-2">
-                {comments.length === 0 && <li className="text-xs text-muted">한마디 없음</li>}
-                {comments.map((c) => (
+                {tips.length === 0 && <li className="text-xs text-muted">꿀팁 없음</li>}
+                {tips.map((c) => (
                   <li key={c.id} className="flex items-start gap-2 text-sm">
                     <span className="flex-1 whitespace-pre-wrap">
                       {c.body} <span className="text-xs text-muted">— {c.nickname || "익명"}</span>
                     </span>
                     <button
                       onClick={() =>
-                        confirm("이 한마디를 삭제할까요?") &&
+                        confirm("이 꿀팁을 삭제할까요?") &&
                         run(async () => {
-                          await api.adminDeleteComment(c.id);
-                          setComments((cs) => cs.filter((x) => x.id !== c.id));
+                          await api.adminDeleteTip(c.id);
+                          setTips((ts) => ts.filter((x) => x.id !== c.id));
                         })
                       }
                       className="shrink-0 text-xs font-bold text-red-500"

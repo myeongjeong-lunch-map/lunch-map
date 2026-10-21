@@ -2,7 +2,7 @@
 // 사용법: node --env-file=.env.local scripts/import-notion.mjs          (검색 결과만 확인)
 //        node --env-file=.env.local scripts/import-notion.mjs --write  (DB에 저장)
 // 이름은 노션 표기를 그대로 쓰고, 좌표·도로명 주소는 네이버 지역 검색 첫 결과에서 가져온다.
-// 비고는 그대로 한마디 하나가 되고, 추천 메뉴와 노션의 도보 칸은 그 뒤에 붙인다.
+// 비고는 그대로 꿀팁 하나가 되고, 추천 메뉴와 노션의 도보 칸은 그 뒤에 붙인다.
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
@@ -61,7 +61,6 @@ for (const r of rows) {
         lat: hit.lat,
         lng: hit.lng,
         category: r.category,
-        solo_dining: r.solo,
         naver_category: hit.category,
         walking_seconds: w.seconds,
         walking_meters: w.meters,
@@ -75,10 +74,15 @@ for (const r of rows) {
   if (error) throw error;
   const body = commentBody(r);
   if (body) {
-    const { count } = await db.from("comments").select("id", { count: "exact", head: true }).eq("place_id", place.id).eq("body", body);
+    const { count } = await db.from("tips").select("id", { count: "exact", head: true }).eq("place_id", place.id).eq("body", body);
     if (!count) {
-      const { error: cErr } = await db.from("comments").insert({ place_id: place.id, body });
+      const { error: cErr } = await db.from("tips").insert({ place_id: place.id, body });
       if (cErr) throw cErr;
     }
+  }
+  // 노션의 "혼밥 가능"(가넝)은 키워드 '혼밥 OK' 1표로 옮긴다
+  if (r.solo === "yes") {
+    const { error: kErr } = await db.from("place_keywords").upsert({ place_id: place.id, voter_id: "notion-import", keyword: "solo" }, { onConflict: "place_id,voter_id,keyword" });
+    if (kErr) throw kErr;
   }
 }

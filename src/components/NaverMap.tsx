@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CAMPUS, type Category, type Place } from "@/lib/domain";
+import { CAMPUS, type Place } from "@/lib/domain";
+import { CATEGORY_EMOJI } from "./categoryStyle";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- 네이버 지도 JS SDK는 타입 정의를 제공하지 않는다 */
 declare global {
@@ -14,18 +15,6 @@ declare global {
 function sdkReady(): boolean {
   return !!window.naver?.maps?.Map;
 }
-
-export const CATEGORY_EMOJI: Record<Category, string> = {
-  한식: "🍚",
-  중식: "🥟",
-  일식: "🍣",
-  양식: "🍝",
-  아시안: "🍜",
-  분식: "🍢",
-  패스트푸드: "🍔",
-  카페: "☕",
-  기타: "🍴",
-};
 
 const LABEL_ZOOM = 18;
 
@@ -196,7 +185,7 @@ export function NaverMap({ places, selectedId, onSelect, pickMode, picked, onPic
       <div ref={el} className={`h-full w-full ${pickMode ? "cursor-crosshair" : ""}`} />
       {error && <div className="absolute inset-0 grid place-items-center bg-surface p-6 text-center text-sm text-muted">{error}</div>}
       {pickMode && (
-        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-foreground/85 px-4 py-2 text-sm font-semibold text-white shadow">
+        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow">
           지도에서 가게 위치를 눌러 주세요
         </div>
       )}

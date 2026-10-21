@@ -3,9 +3,20 @@
 export const CATEGORIES = ["한식", "중식", "일식", "양식", "아시안", "분식", "패스트푸드", "카페", "기타"] as const;
 export type Category = (typeof CATEGORIES)[number];
 
-export const SOLO_DINING = ["yes", "no", "unknown"] as const;
-export type SoloDining = (typeof SOLO_DINING)[number];
-export const SOLO_LABEL: Record<SoloDining, string> = { yes: "혼밥 가능", no: "혼밥 어려움", unknown: "혼밥 모름" };
+// 키워드: 노션 비고에서 반복해서 나온 관심사 8개. 브라우저 하나가 가게마다 최대 5개 고른다.
+export const KEYWORDS = [
+  { key: "tasty", label: "😋 맛있음" },
+  { key: "value", label: "💸 가성비" },
+  { key: "portion", label: "🍚 양 많음" },
+  { key: "fast", label: "⚡ 빨리 나옴" },
+  { key: "solo", label: "🙋 혼밥 OK" },
+  { key: "group", label: "👥 단체 OK" },
+  { key: "nowait", label: "🕐 웨이팅 없음" },
+  { key: "takeout", label: "🥡 포장 OK" },
+] as const;
+export type KeywordKey = (typeof KEYWORDS)[number]["key"];
+export const MAX_KEYWORDS_PER_PLACE = 5;
+export const KEYWORD_LABEL = Object.fromEntries(KEYWORDS.map((k) => [k.key, k.label])) as Record<KeywordKey, string>;
 
 // 캠퍼스: 서울 서초구 반포대로 45 명정빌딩 (네이버 Geocoding 결과)
 export const CAMPUS = { name: "명정빌딩", lat: 37.4845457, lng: 127.0108578 };
@@ -17,7 +28,6 @@ export type Place = {
   lat: number;
   lng: number;
   category: Category;
-  solo_dining: SoloDining;
   naver_category: string | null;
   naver_place_id: string | null;
   walking_seconds: number | null;
@@ -25,11 +35,15 @@ export type Place = {
   walking_source: "tmap" | "estimate" | null;
   likes: number;
   dislikes: number;
-  comment_count: number;
+  tip_count: number;
+  /** 키워드별로 고른 사람 수 */
+  keywords: Partial<Record<KeywordKey, number>>;
+  /** 이번 주 랭킹 점수: 최근 7일 좋아요 × 2 + 최근 7일 꿀팁 수 */
+  weekly_score: number;
   created_at: string;
 };
 
-export type Comment = {
+export type Tip = {
   id: string;
   place_id: string;
   nickname: string | null;
@@ -41,6 +55,23 @@ export type MyVote = 1 | -1 | 0;
 
 export function walkingMinutes(place: Pick<Place, "walking_seconds">): number | null {
   return place.walking_seconds == null ? null : Math.max(1, Math.round(place.walking_seconds / 60));
+}
+
+// 랭킹. "전체"는 좋아요 − 싫어요. 같으면 가까운 순.
+export type RankingPeriod = "week" | "all";
+
+export function rankPlaces(places: Place[], period: RankingPeriod): Place[] {
+  const score = period === "week" ? (p: Place) => p.weekly_score : (p: Place) => p.likes - p.dislikes;
+  return [...places].sort((a, b) => score(b) - score(a) || (a.walking_seconds ?? Infinity) - (b.walking_seconds ?? Infinity));
+}
+
+export function topKeyword(place: Place): { key: KeywordKey; count: number } | null {
+  let best: { key: KeywordKey; count: number } | null = null;
+  for (const k of KEYWORDS) {
+    const count = place.keywords[k.key] ?? 0;
+    if (count > 0 && (!best || count > best.count)) best = { key: k.key, count };
+  }
+  return best;
 }
 
 // 네이버 지도에서 가게 열기. 플레이스 ID가 있으면 그 가게로 바로, 없으면 "이름 + 구"로 검색한다.
@@ -69,6 +100,16 @@ export function isCategory(v: unknown): v is Category {
   return typeof v === "string" && (CATEGORIES as readonly string[]).includes(v);
 }
 
-export function isSoloDining(v: unknown): v is SoloDining {
-  return typeof v === "string" && (SOLO_DINING as readonly string[]).includes(v);
+export function isKeyword(v: unknown): v is KeywordKey {
+  return typeof v === "string" && KEYWORDS.some((k) => k.key === v);
+}
+
+// 꿀팁/키워드/평가가 몇 분 전인지 사람이 읽기 좋게
+export function timeAgo(iso: string): string {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return "방금";
+  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+  if (diff < 86400 * 30) return `${Math.floor(diff / 86400)}일 전`;
+  return new Date(iso).toLocaleDateString("ko-KR");
 }

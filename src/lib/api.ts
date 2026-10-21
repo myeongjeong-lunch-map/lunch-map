@@ -1,4 +1,4 @@
-import type { Comment, MyVote, Place } from "./domain";
+import type { KeywordKey, MyVote, Place, Tip } from "./domain";
 
 export class ApiError extends Error {
   constructor(
@@ -23,13 +23,17 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export type SearchResult = { name: string; roadAddress: string; naverCategory: string; lat: number; lng: number };
 
+export type PlacesResponse = { places: Place[]; myVotes: Record<string, MyVote>; myKeywords: Record<string, KeywordKey[]> };
+
 export const api = {
-  places: () => request<{ places: Place[]; myVotes: Record<string, MyVote> }>("/api/places"),
+  places: () => request<PlacesResponse>("/api/places"),
   addPlace: (body: Record<string, unknown>) => request<{ id: string }>("/api/places", { method: "POST", body: JSON.stringify(body) }),
-  comments: (placeId: string) => request<{ comments: Comment[] }>(`/api/places/${placeId}/comments`),
-  addComment: (placeId: string, body: Record<string, unknown>) =>
-    request<{ comment: Comment }>(`/api/places/${placeId}/comments`, { method: "POST", body: JSON.stringify(body) }),
+  tips: (placeId: string) => request<{ tips: Tip[] }>(`/api/places/${placeId}/tips`),
+  recentTips: () => request<{ tips: Tip[] }>("/api/tips?limit=60"),
+  addTip: (placeId: string, body: Record<string, unknown>) => request<{ tip: Tip }>(`/api/places/${placeId}/tips`, { method: "POST", body: JSON.stringify(body) }),
   vote: (placeId: string, value: MyVote) => request<{ ok: true }>(`/api/places/${placeId}/vote`, { method: "PUT", body: JSON.stringify({ value }) }),
+  setKeywords: (placeId: string, keywords: KeywordKey[]) =>
+    request<{ ok: true }>(`/api/places/${placeId}/keywords`, { method: "PUT", body: JSON.stringify({ keywords }) }),
   search: (q: string) => request<{ results: SearchResult[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   reverse: (lat: number, lng: number) => request<{ roadAddress: string | null }>(`/api/reverse?lat=${lat}&lng=${lng}`),
   adminStatus: () => request<{ admin: boolean }>("/api/admin"),
@@ -37,7 +41,7 @@ export const api = {
   adminUpdatePlace: (id: string, body: Record<string, unknown>) =>
     request<{ ok: true }>(`/api/admin/places/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   adminDeletePlace: (id: string) => request<{ ok: true }>(`/api/admin/places/${id}`, { method: "DELETE" }),
-  adminDeleteComment: (id: string) => request<{ ok: true }>(`/api/admin/comments/${id}`, { method: "DELETE" }),
+  adminDeleteTip: (id: string) => request<{ ok: true }>(`/api/admin/tips/${id}`, { method: "DELETE" }),
 };
 
 const NICKNAME_KEY = "lm_nickname";

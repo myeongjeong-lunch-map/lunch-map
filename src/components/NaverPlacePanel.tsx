@@ -23,7 +23,7 @@ export function NaverPlacePanel({ name, naverPlaceId, tab, onTab, onClose }: Pro
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-background">
       <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
         <button onClick={onClose} className="shrink-0 rounded-full px-2 py-1 text-sm font-semibold text-muted hover:bg-surface hover:text-foreground">
           ← 가게 카드로
@@ -35,7 +35,7 @@ export function NaverPlacePanel({ name, naverPlaceId, tab, onTab, onClose }: Pro
           <button
             key={t.key}
             onClick={() => onTab(t.key)}
-            className={`flex-1 rounded-lg py-2 text-sm font-bold ${tab === t.key ? "bg-foreground text-white" : "text-foreground hover:bg-surface"}`}
+            className={`flex-1 rounded-lg py-2 text-sm font-bold ${tab === t.key ? "bg-foreground text-background" : "text-foreground hover:bg-surface"}`}
           >
             {t.label}
           </button>

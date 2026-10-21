@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isCategory, isSoloDining } from "@/lib/domain";
+import { isCategory } from "@/lib/domain";
 import { resolveNaverPlaceId } from "@/lib/naverPlaceId";
 import { db } from "@/lib/server/supabase";
 import { cleanText, errorResponse, HttpError, requireAdmin } from "@/lib/server/guard";
@@ -18,10 +18,6 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/plac
     if (body.category !== undefined) {
       if (!isCategory(body.category)) throw new HttpError(400, "잘못된 카테고리예요.");
       update.category = body.category;
-    }
-    if (body.soloDining !== undefined) {
-      if (!isSoloDining(body.soloDining)) throw new HttpError(400, "잘못된 혼밥 값이에요.");
-      update.solo_dining = body.soloDining;
     }
     if (body.naverLink !== undefined) {
       const link = cleanText(body.naverLink, 500);

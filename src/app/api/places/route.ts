@@ -1,22 +1,45 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isCategory, isSoloDining, type MyVote } from "@/lib/domain";
+import { isCategory, isKeyword, MAX_KEYWORDS_PER_PLACE, type KeywordKey, type MyVote, type Place } from "@/lib/domain";
 import { db } from "@/lib/server/supabase";
 import { cleanText, ensureVoterId, errorResponse, guardWrite, HttpError, readVoterId } from "@/lib/server/guard";
 import { computeWalking } from "@/lib/server/walking";
 import { resolveNaverPlaceId } from "@/lib/naverPlaceId";
 
+const WEEK_MS = 7 * 24 * 3600 * 1000;
+
 export async function GET(req: NextRequest) {
   try {
-    const { data: places, error } = await db().from("place_summaries").select("*").order("walking_seconds", { ascending: true, nullsFirst: false });
-    if (error) throw error;
+    const since = new Date(Date.now() - WEEK_MS).toISOString();
+    const [summaries, keywords, weekLikes, weekTips] = await Promise.all([
+      db().from("place_summaries").select("*"),
+      db().from("place_keywords").select("place_id, keyword, voter_id"),
+      db().from("votes").select("place_id").eq("value", 1).gte("updated_at", since),
+      db().from("tips").select("place_id").gte("created_at", since),
+    ]);
+    for (const r of [summaries, keywords, weekLikes, weekTips]) if (r.error) throw r.error;
+
     const voterId = readVoterId(req);
+    const keywordCounts = new Map<string, Partial<Record<KeywordKey, number>>>();
+    const myKeywords: Record<string, KeywordKey[]> = {};
+    for (const k of keywords.data ?? []) {
+      const counts = keywordCounts.get(k.place_id) ?? {};
+      counts[k.keyword as KeywordKey] = (counts[k.keyword as KeywordKey] ?? 0) + 1;
+      keywordCounts.set(k.place_id, counts);
+      if (voterId && k.voter_id === voterId) (myKeywords[k.place_id] ??= []).push(k.keyword as KeywordKey);
+    }
+    const weekly = new Map<string, number>();
+    for (const v of weekLikes.data ?? []) weekly.set(v.place_id, (weekly.get(v.place_id) ?? 0) + 2);
+    for (const t of weekTips.data ?? []) weekly.set(t.place_id, (weekly.get(t.place_id) ?? 0) + 1);
+
+    const places: Place[] = (summaries.data ?? []).map((p) => ({ ...p, keywords: keywordCounts.get(p.id) ?? {}, weekly_score: weekly.get(p.id) ?? 0 }));
+
     const myVotes: Record<string, MyVote> = {};
     if (voterId) {
-      const { data: votes, error: vErr } = await db().from("votes").select("place_id, value").eq("voter_id", voterId);
-      if (vErr) throw vErr;
+      const { data: votes, error } = await db().from("votes").select("place_id, value").eq("voter_id", voterId);
+      if (error) throw error;
       for (const v of votes ?? []) myVotes[v.place_id] = v.value as MyVote;
     }
-    const res = NextResponse.json({ places, myVotes });
+    const res = NextResponse.json({ places, myVotes, myKeywords });
     ensureVoterId(req, res);
     return res;
   } catch (e) {
@@ -37,9 +60,9 @@ export async function POST(req: NextRequest) {
       throw new HttpError(400, "캠퍼스 근처의 위치만 등록할 수 있어요.");
     }
     if (!isCategory(body.category)) throw new HttpError(400, "카테고리를 골라 주세요.");
-    const solo = isSoloDining(body.soloDining) ? body.soloDining : "unknown";
-    const commentBody = cleanText(body.comment, 1000);
+    const tipBody = cleanText(body.tip, 1000);
     const nickname = cleanText(body.nickname, 20);
+    const keywords = Array.isArray(body.keywords) ? [...new Set(body.keywords.filter(isKeyword))].slice(0, MAX_KEYWORDS_PER_PLACE) : [];
 
     const { data: existing } = await db().from("places").select("id").eq("name", name).eq("road_address", roadAddress).maybeSingle();
     if (existing) return NextResponse.json({ error: "이미 등록된 가게예요.", placeId: existing.id }, { status: 409 });
@@ -57,7 +80,6 @@ export async function POST(req: NextRequest) {
         lat,
         lng,
         category: body.category,
-        solo_dining: solo,
         naver_category: cleanText(body.naverCategory, 100),
         naver_place_id: naverPlaceId,
         walking_seconds: walking.seconds,
@@ -71,11 +93,19 @@ export async function POST(req: NextRequest) {
       if (error.code === "23505") throw new HttpError(409, "이미 등록된 가게예요.");
       throw error;
     }
-    if (commentBody) {
-      const { error: cErr } = await db().from("comments").insert({ place_id: place.id, body: commentBody, nickname });
-      if (cErr) throw cErr;
+    const res = NextResponse.json({ id: place.id }, { status: 201 });
+    if (tipBody) {
+      const { error: tErr } = await db().from("tips").insert({ place_id: place.id, body: tipBody, nickname });
+      if (tErr) throw tErr;
     }
-    return NextResponse.json({ id: place.id }, { status: 201 });
+    if (keywords.length) {
+      const voterId = ensureVoterId(req, res);
+      const { error: kErr } = await db()
+        .from("place_keywords")
+        .insert(keywords.map((keyword) => ({ place_id: place.id, voter_id: voterId, keyword })));
+      if (kErr) throw kErr;
+    }
+    return res;
   } catch (e) {
     return errorResponse(e);
   }
