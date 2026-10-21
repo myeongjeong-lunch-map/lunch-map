@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { THEME_INIT_SCRIPT } from "@/components/ThemeToggle";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -10,12 +11,19 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#14151a",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#14151a" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ko" className="h-full antialiased">
+    // 저장된 테마는 인라인 스크립트가 첫 화면 전에 data-theme로 적용한다 (그래서 hydration 경고를 끈다)
+    <html lang="ko" className="h-full antialiased" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="h-full">{children}</body>
     </html>
   );

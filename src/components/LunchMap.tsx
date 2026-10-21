@@ -12,6 +12,7 @@ import { PlaceDetail } from "./PlaceDetail";
 import { AddPlace } from "./AddPlace";
 import { BottomSheet, type SheetSnap } from "./BottomSheet";
 import { NaverPlacePanel } from "./NaverPlacePanel";
+import { ThemeToggle } from "./ThemeToggle";
 
 const DESKTOP_QUERY = "(min-width: 768px)";
 
@@ -173,11 +174,14 @@ export function LunchMap() {
             <p className="text-[11px] font-bold tracking-widest text-brand">MYEONGJEONG LUNCH</p>
             <h1 className="text-xl font-black">명정 점심 지도</h1>
           </button>
-          {mode.kind !== "add" && (
-            <button onClick={startAdd} className="shrink-0 rounded-full border border-line px-3 py-1.5 text-xs font-bold hover:bg-surface">
-              + 맛집 추가
-            </button>
-          )}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {mode.kind !== "add" && (
+              <button onClick={startAdd} className="rounded-full border border-line px-3 py-1.5 text-xs font-bold hover:bg-surface">
+                + 맛집 추가
+              </button>
+            )}
+            <ThemeToggle />
+          </div>
         </div>
         {mode.kind !== "add" && (
           <button

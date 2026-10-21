@@ -1,10 +1,37 @@
 @import "tailwindcss";
 
-/* 진한 테마 (시안 E). 지도만 밝고 나머지 패널은 어둡다. */
+/* 테마: 기본은 기기 설정(prefers-color-scheme)을 따르고, 사용자가 고르면 <html data-theme>로 덮어쓴다.
+   고른 값은 localStorage "lm_theme"에 두고 layout.tsx의 인라인 스크립트가 첫 화면 전에 적용한다. */
 :root {
   --brand: #03c75a;
   --brand-dark: #02a84b;
   --brand-ink: #0b2b18;
+  --gold: #d99a00;
+  --background: #ffffff;
+  --foreground: #1e1e23;
+  --muted: #74757d;
+  --line: #e6e7ea;
+  --surface: #f4f5f7;
+  --surface-2: #ebedf0;
+  --danger: #e5484d;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --gold: #ffd166;
+    --background: #14151a;
+    --foreground: #f2f3f5;
+    --muted: #8b8d98;
+    --line: #2a2c35;
+    --surface: #1d1f26;
+    --surface-2: #262832;
+    --danger: #ff6b6b;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
   --gold: #ffd166;
   --background: #14151a;
   --foreground: #f2f3f5;
@@ -13,6 +40,7 @@
   --surface: #1d1f26;
   --surface-2: #262832;
   --danger: #ff6b6b;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -36,7 +64,6 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   overscroll-behavior: none;
-  color-scheme: dark;
 }
 
 /* 지도 마커 (네이버 지도 HTML 아이콘) */
@@ -52,7 +79,7 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
+  color: var(--foreground);
   white-space: nowrap;
   cursor: pointer;
   position: relative;
@@ -89,20 +116,22 @@ body {
 .lm-marker.selected .emoji {
   background: #fff;
 }
+/* 캠퍼스 마커는 테마와 반대 색으로 눈에 띄게 */
 .lm-marker.campus {
-  background: #fff;
-  border-color: #fff;
+  background: var(--foreground);
+  border-color: var(--foreground);
   color: var(--background);
 }
 .lm-marker.campus::after {
-  border-top-color: #fff;
+  border-top-color: var(--foreground);
 }
 .lm-marker.campus .emoji {
-  background: #eef0f3;
+  background: var(--background);
 }
 .lm-marker.pick {
   border-color: var(--danger);
   background: var(--danger);
+  color: #fff;
 }
 .lm-marker.pick::after {
   border-top-color: var(--danger);
