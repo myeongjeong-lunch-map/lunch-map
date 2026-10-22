@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api } from "@/lib/api";
-import { rankPlaces, type KeywordKey, type MyVote, type Place, type RankingPeriod, type Tip } from "@/lib/domain";
+import { rankPlaces, type KeywordKey, type MyVote, type Place, type RankingPeriod, type TeamSummary, type Tip } from "@/lib/domain";
 import type { PlaceTab } from "@/lib/naverPlaceId";
 import { NaverMap } from "./NaverMap";
 import { PlaceList, applyFilters, isFiltered, DEFAULT_FILTERS, type Filters } from "./PlaceList";
@@ -13,6 +13,7 @@ import { AddPlace } from "./AddPlace";
 import { BottomSheet, type SheetSnap } from "./BottomSheet";
 import { NaverPlacePanel } from "./NaverPlacePanel";
 import { ThemeToggle } from "./ThemeToggle";
+import { DrawTab } from "./DrawTab";
 
 const DESKTOP_QUERY = "(min-width: 768px)";
 
@@ -28,8 +29,11 @@ function useIsDesktop(): boolean {
   );
 }
 
-type Tab = "rank" | "list" | "tips";
-const TAB_LABEL: Record<Tab, string> = { rank: "🏆 랭킹", list: "📍 목록", tips: "💡 꿀팁" };
+type Tab = "rank" | "list" | "tips" | "draw";
+const TAB_LABEL: Record<Tab, string> = { rank: "🏆 랭킹", list: "📍 목록", tips: "💡 꿀팁", draw: "🎟️ 추첨" };
+
+// 추첨 탭에서 마지막으로 본 팀. 초대 링크(/?team=…)로 들어오면 그 팀을 연다.
+const TEAM_KEY = "lm_team";
 
 // detail.tab: 네이버 플레이스(메뉴·사진·리뷰) 패널이 열려 있으면 그 탭
 type Mode = { kind: "browse" } | { kind: "detail"; id: string; tab?: PlaceTab } | { kind: "add" };
@@ -49,6 +53,9 @@ export function LunchMap() {
   const [picked, setPicked] = useState<{ lat: number; lng: number } | null>(null);
   const [snap, setSnap] = useState<SheetSnap>("half");
   const [rolling, setRolling] = useState(false);
+  const [teams, setTeams] = useState<TeamSummary[] | null>(null);
+  const [teamsError, setTeamsError] = useState<string | null>(null);
+  const [teamId, setTeamIdState] = useState<string | null>(null);
   const queue = useRef(new Map<string, Promise<unknown>>());
 
   const reload = useCallback(async () => {
@@ -69,6 +76,49 @@ export function LunchMap() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void reload();
   }, [reload]);
+
+  const reloadTeams = useCallback(async () => {
+    try {
+      setTeams((await api.teams()).teams);
+      setTeamsError(null);
+    } catch (e) {
+      setTeamsError((e as Error).message);
+    }
+  }, []);
+
+  const setTeamId = useCallback((id: string | null) => {
+    setTeamIdState(id);
+    try {
+      if (id) localStorage.setItem(TEAM_KEY, id);
+      else localStorage.removeItem(TEAM_KEY);
+    } catch {
+      // 저장 못 해도 동작에는 문제 없음
+    }
+  }, []);
+
+  useEffect(() => {
+    // 마운트 시 팀 목록을 불러오고, 초대 링크나 지난번에 본 팀을 연다 (localStorage·URL은 서버 렌더 때 읽을 수 없다)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void reloadTeams();
+    const invited = new URLSearchParams(location.search).get("team");
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(TEAM_KEY);
+    } catch {
+      // 무시
+    }
+    setTeamIdState(invited ?? saved);
+    if (invited) {
+      setTab("draw");
+      setSnap("full");
+      history.replaceState(null, "", location.pathname);
+    }
+  }, [reloadTeams]);
+
+  const addToBox = async (id: string, placeId: string) => {
+    await api.addEntry(id, placeId);
+    await reloadTeams();
+  };
 
   const all = useMemo(() => places ?? [], [places]);
   const listed = useMemo(() => applyFilters(all, filters), [all, filters]);
@@ -193,7 +243,7 @@ export function LunchMap() {
           </button>
         )}
         {mode.kind === "browse" && (
-          <div className="mt-3 grid grid-cols-3 rounded-xl bg-surface p-1 text-sm font-bold">
+          <div className="mt-3 grid grid-cols-4 rounded-xl bg-surface p-1 text-sm font-bold">
             {(Object.keys(TAB_LABEL) as Tab[]).map((k) => (
               <button key={k} onClick={() => setTab(k)} className={`rounded-lg py-2 ${tab === k ? "bg-foreground text-background" : "text-muted"}`}>
                 {TAB_LABEL[k]}
@@ -227,7 +277,7 @@ export function LunchMap() {
             key={selected.id}
             place={selected}
             rank={rank}
-            backLabel={`${TAB_LABEL[tab].slice(2)}으로`}
+            backLabel={`${TAB_LABEL[tab].split(" ")[1]}으로`}
             myVote={myVotes[selected.id] ?? 0}
             myKeywords={myKeywords[selected.id] ?? []}
             onVote={(v) => vote(selected.id, v)}
@@ -236,13 +286,28 @@ export function LunchMap() {
             onTipAdded={onTipAdded}
             openTab={placeTab}
             onOpenTab={(t) => setPlaceTab(t)}
+            drawTeams={(teams ?? []).filter((t) => t.open_box)}
+            onAddToBox={(id) => addToBox(id, selected.id)}
           />
         ) : tab === "rank" ? (
           <RankingList places={all} period={period} onPeriod={setPeriod} onSelect={select} />
         ) : tab === "list" ? (
           <PlaceList places={listed} total={all.length} filters={filters} onFilters={setFilters} onSelect={select} latestTip={latestTip} />
-        ) : (
+        ) : tab === "tips" ? (
           <TipFeed tips={recentTips} places={all} onSelect={select} />
+        ) : (
+          <DrawTab
+            places={all}
+            teams={teams}
+            teamsError={teamsError}
+            teamId={teamId}
+            onTeamId={setTeamId}
+            onTeamsChanged={reloadTeams}
+            onShowPlace={(id) => {
+              select(id);
+              setSnap("full");
+            }}
+          />
         )}
       </div>
     </div>

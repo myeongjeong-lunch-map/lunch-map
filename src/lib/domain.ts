@@ -113,3 +113,65 @@ export function timeAgo(iso: string): string {
   if (diff < 86400 * 30) return `${Math.floor(diff / 86400)}일 전`;
   return new Date(iso).toLocaleDateString("ko-KR");
 }
+
+// 추첨: 팀의 추첨통에 든 가게 가운데 하나를 넣은 횟수(가중치)에 비례해 뽑는다. 결과는 서버가 정한다 (ADR 0004).
+export const DRAW_LIMITS = [1, 2, 3] as const;
+export type DrawLimit = (typeof DRAW_LIMITS)[number];
+export const DRAW_ANIMATIONS = [
+  { key: "race", label: "🏇 경주" },
+  { key: "plinko", label: "🎯 플링코" },
+] as const;
+export type DrawAnimation = (typeof DRAW_ANIMATIONS)[number]["key"];
+export const MIN_DRAW_PLACES = 2;
+
+export function isDrawLimit(v: unknown): v is DrawLimit {
+  return DRAW_LIMITS.includes(v as DrawLimit);
+}
+
+export function isDrawAnimation(v: unknown): v is DrawAnimation {
+  return DRAW_ANIMATIONS.some((a) => a.key === v);
+}
+
+/** 팀 목록 한 줄. 내가 팀원이면 열린 추첨통 정보도 담는다. */
+export type TeamSummary = {
+  id: string;
+  name: string;
+  member_count: number;
+  is_member: boolean;
+  is_leader: boolean;
+  /** 내가 팀원이고 추첨통이 열려 있으면: 추첨통 ID와 내가 더 넣을 수 있는 횟수 */
+  open_box: { id: string; remaining: number } | null;
+};
+
+// 팀원 ID는 브라우저 쿠키 값이라 화면으로 보내지 않는다. 닉네임과 "나인지"만 보낸다.
+export type TeamMember = { nickname: string; is_leader: boolean; is_me: boolean };
+
+export type DrawEntry = { id: string; place_id: string; nickname: string; is_mine: boolean };
+
+export type DrawBox = {
+  id: string;
+  per_member_limit: DrawLimit;
+  status: "open" | "drawn" | "cancelled";
+  animation: DrawAnimation | null;
+  result_place_id: string | null;
+  drawn_at: string | null;
+  entries: DrawEntry[];
+};
+
+export type TeamDetail = {
+  id: string;
+  name: string;
+  members: TeamMember[];
+  is_member: boolean;
+  is_leader: boolean;
+  open_box: DrawBox | null;
+  /** 추첨 기록: 최근에 뽑은 추첨통부터 */
+  records: DrawBox[];
+};
+
+/** 추첨통을 가게별 가중치로 묶는다. 많이 넣은 가게부터. */
+export function drawWeights(entries: Pick<DrawEntry, "place_id">[]): { place_id: string; weight: number }[] {
+  const m = new Map<string, number>();
+  for (const e of entries) m.set(e.place_id, (m.get(e.place_id) ?? 0) + 1);
+  return [...m].map(([place_id, weight]) => ({ place_id, weight })).sort((a, b) => b.weight - a.weight);
+}

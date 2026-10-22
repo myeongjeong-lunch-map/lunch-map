@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
-import { KEYWORDS, MAX_KEYWORDS_PER_PLACE, naverMapUrl, timeAgo, type KeywordKey, type MyVote, type Place, type Tip } from "@/lib/domain";
+import { KEYWORDS, MAX_KEYWORDS_PER_PLACE, naverMapUrl, timeAgo, type KeywordKey, type MyVote, type Place, type TeamSummary, type Tip } from "@/lib/domain";
 import type { PlaceTab } from "@/lib/naverPlaceId";
 import { CATEGORY_COLOR, CATEGORY_EMOJI } from "./categoryStyle";
 import { CategoryDot, Walking } from "./PlaceList";
@@ -26,15 +26,29 @@ type Props = {
   /** 열려 있는 네이버 플레이스 탭 */
   openTab: PlaceTab | undefined;
   onOpenTab: (t: PlaceTab) => void;
+  /** 추첨통이 열려 있는 내 팀들. 비어 있으면 추첨통에 넣기 버튼을 숨긴다. */
+  drawTeams: TeamSummary[];
+  onAddToBox: (teamId: string) => Promise<void>;
 };
 
-export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote, onKeywords, onBack, onTipAdded, openTab, onOpenTab }: Props) {
+export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote, onKeywords, onBack, onTipAdded, openTab, onOpenTab, drawTeams, onAddToBox }: Props) {
   const [tips, setTips] = useState<Tip[] | null>(null);
   const [body, setBody] = useState("");
   const [nickname, setNickname] = useState(loadNickname);
   const [website, setWebsite] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [boxMsg, setBoxMsg] = useState<string | null>(null);
+
+  const addToBox = async (t: TeamSummary) => {
+    setBoxMsg(null);
+    try {
+      await onAddToBox(t.id);
+      setBoxMsg(`${t.name} 추첨통에 넣었어요`);
+    } catch (err) {
+      setBoxMsg((err as Error).message);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -107,6 +121,21 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
           👎 싫어요 {place.dislikes}
         </button>
       </div>
+      {drawTeams.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          {drawTeams.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => void addToBox(t)}
+              disabled={!t.open_box?.remaining}
+              className="w-full rounded-xl border border-brand/60 py-2.5 text-sm font-bold text-brand hover:bg-brand/10 disabled:opacity-40"
+            >
+              🎟️ {drawTeams.length > 1 ? `${t.name} ` : ""}추첨통에 넣기 {t.open_box?.remaining ? `(남은 ${t.open_box.remaining}번)` : "(다 넣었어요)"}
+            </button>
+          ))}
+          {boxMsg && <p className="text-center text-xs font-bold text-muted">{boxMsg}</p>}
+        </div>
+      )}
       {place.naver_place_id ? (
         <div className="mt-2 grid grid-cols-3 gap-2 text-sm font-bold">
           {NAVER_TABS.map((t) => (
