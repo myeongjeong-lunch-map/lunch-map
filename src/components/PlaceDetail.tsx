@@ -38,6 +38,8 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
   const [website, setWebsite] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bodyMissing, setBodyMissing] = useState(false);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [boxError, setBoxError] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
   // 방금 넣은 팀. at은 연달아 넣을 때 효과를 다시 틀기 위한 key
@@ -73,7 +75,12 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!body.trim()) return;
+    // 버튼을 막아 두지 않고, 눌렀을 때 무엇이 빠졌는지 알려 준다
+    if (!body.trim()) {
+      setBodyMissing(true);
+      bodyRef.current?.focus();
+      return;
+    }
     setSending(true);
     setError(null);
     try {
@@ -215,27 +222,41 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
       <h3 className="mt-7 text-lg font-black">💡 꿀팁 {tips ? tips.length : ""}</h3>
       <form onSubmit={submit} className="mt-2 space-y-2 rounded-xl border border-line bg-surface p-3">
         <textarea
+          ref={bodyRef}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => {
+            setBody(e.target.value);
+            if (bodyMissing) setBodyMissing(false);
+          }}
           maxLength={1000}
           rows={2}
+          aria-label="꿀팁 내용"
+          aria-invalid={bodyMissing}
           placeholder="추천 메뉴, 가격, 가는 길, 웨이팅… 꿀팁 남기기"
-          className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted"
+          className={`w-full resize-none rounded-lg border bg-background px-3 py-2 text-sm outline-none placeholder:text-muted ${
+            bodyMissing ? "border-danger" : "border-line focus:border-brand"
+          }`}
         />
         {/* 봇만 채우는 숨은 칸 */}
         <input value={website} onChange={(e) => setWebsite(e.target.value)} name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden />
         <div className="flex gap-2">
-          <input
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            maxLength={20}
-            placeholder="닉네임 (선택)"
-            className="min-w-0 flex-1 rounded-lg border border-line bg-background px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-brand"
-          />
-          <button disabled={sending || !body.trim()} className="rounded-lg bg-brand px-4 text-sm font-bold text-brand-ink disabled:opacity-40">
+          {/* 닉네임 칸에 꿀팁을 적는 실수가 잦아서, 값을 넣어도 "닉네임" 라벨이 남게 한다 */}
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-background px-3 focus-within:border-brand">
+            <span className="shrink-0 text-xs font-bold text-muted">닉네임</span>
+            <input
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              maxLength={20}
+              aria-label="닉네임"
+              placeholder="선택"
+              className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-muted"
+            />
+          </label>
+          <button disabled={sending} className="shrink-0 rounded-lg bg-brand px-4 text-sm font-bold text-brand-ink disabled:opacity-40">
             {sending ? "등록 중" : "남기기"}
           </button>
         </div>
+        {bodyMissing && <p className="text-xs font-bold text-danger">위 칸에 꿀팁 내용을 먼저 적어 주세요.</p>}
         {error && <p className="text-xs text-danger">{error}</p>}
       </form>
       <ul className="mt-2 space-y-2">
