@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
-import { DRAW_ANIMATIONS, DRAW_LIMITS, drawWeights, MIN_DRAW_PLACES, type DrawAnimation, type DrawBox, type DrawLimit, type Place, type TeamDetail, type TeamSummary } from "@/lib/domain";
+import { DRAW_ANIMATIONS, DRAW_LIMITS, drawCandidates, drawWeights, MIN_DRAW_PLACES, type DrawAnimation, type DrawBox, type DrawLimit, type DrawResult, type Place, type TeamDetail, type TeamSummary } from "@/lib/domain";
 import { CategoryDot } from "./PlaceList";
 import { DrawShow, type ShowEntry } from "./DrawShow";
 
 // 추첨 탭: 팀 목록 → 팀 화면(추첨통, 추첨 기록). 팀 화면은 몇 초마다 다시 불러
-// 조장이 추첨을 시작하면 지금 이 탭을 보고 있는 팀원 모두가 같은 연출을 본다.
+// 조장이 추첨(다시 뽑기 포함)을 시작하면 지금 이 탭을 보고 있는 팀원 모두가 같은 연출을 본다.
 
 const POLL_MS = 3000;
+// 이보다 오래된 추첨은 탭을 열었을 때 연출을 자동으로 띄우지 않는다 (다시 보기로 볼 수 있다)
+const FRESH_DRAW_MS = 2 * 60_000;
 
 type Props = {
   places: Place[];
@@ -21,16 +23,19 @@ type Props = {
   onShowPlace: (id: string) => void;
 };
 
-type Show = { box: DrawBox; entries: ShowEntry[] };
+type Show = { result: DrawResult; entries: ShowEntry[] };
 
-function showOf(box: DrawBox, byId: Map<string, Place>): Show | null {
-  if (!box.result_place_id || !box.animation) return null;
-  const entries = drawWeights(box.entries).flatMap((w) => {
+/** 그 회차의 후보(앞 회차에 뽑힌 가게를 뺀 것)로 연출을 만든다 */
+function showOf(box: DrawBox, result: DrawResult | undefined, byId: Map<string, Place>): Show | null {
+  if (!result?.place_id) return null;
+  const entries = drawWeights(drawCandidates(box.entries, box.results, result.round)).flatMap((w) => {
     const place = byId.get(w.place_id);
     return place ? [{ place, weight: w.weight }] : [];
   });
-  return entries.some((e) => e.place.id === box.result_place_id) ? { box, entries } : null;
+  return entries.some((e) => e.place.id === result.place_id) ? { result, entries } : null;
 }
+
+const roundLabel = (n: number) => `${n}차`;
 
 export function DrawTab({ places, teams, teamsError, teamId, onTeamId, onTeamsChanged, onShowPlace }: Props) {
   if (teams == null)
@@ -198,7 +203,8 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
   const [nickname, setNickname] = useState(loadNickname);
   const [show, setShow] = useState<Show | null>(null);
   const [copied, setCopied] = useState(false);
-  const watchingBox = useRef<string | null>(null);
+  // 마지막으로 본 회차 결과. undefined면 아직 한 번도 불러오지 않은 것
+  const seenResult = useRef<string | null | undefined>(undefined);
   const byId = useMemo(() => new Map(places.map((p) => [p.id, p])), [places]);
 
   const refresh = useCallback(async () => {
@@ -206,13 +212,15 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
       const { team } = await api.team(summary.id);
       setTeam(team);
       setError(null);
-      // 보고 있던 추첨통이 추첨되면 연출을 띄운다
-      const latest = team.records[0];
-      if (watchingBox.current && !team.open_box && latest?.id === watchingBox.current) {
-        const s = showOf(latest, byId);
+      // 이 탭을 보는 동안 새 회차 결과가 생기면 연출을 띄운다
+      const box = team.open_box ?? team.records[0];
+      const latest = box?.results.at(-1);
+      const fresh = latest && Date.now() - new Date(latest.drawn_at).getTime() < FRESH_DRAW_MS;
+      if (seenResult.current !== undefined && box && latest && latest.id !== seenResult.current && fresh) {
+        const s = showOf(box, latest, byId);
         if (s) setShow(s);
       }
-      watchingBox.current = team.open_box?.id ?? null;
+      seenResult.current = latest?.id ?? null;
     } catch (e) {
       setError((e as Error).message);
     }
@@ -254,7 +262,13 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
   const myTeams = teams.filter((t) => t.is_member);
   const box = team?.open_box ?? null;
   const weights = box ? drawWeights(box.entries) : [];
-  const total = box?.entries.length ?? 0;
+  // 첫 추첨을 하면 더 넣거나 뺄 수 없고, 확률은 아직 뽑히지 않은 후보 안에서 다시 계산한다
+  const locked = !!box?.results.length;
+  const lastResult = box?.results.at(-1);
+  const lastPlace = lastResult?.place_id ? byId.get(lastResult.place_id) : undefined;
+  const candidates = box ? drawCandidates(box.entries, box.results) : [];
+  const candidatePlaces = drawWeights(candidates).length;
+  const total = candidates.length;
   const myUsed = box ? box.entries.filter((e) => e.is_mine).length : 0;
   const remaining = box ? box.per_member_limit - myUsed : 0;
   const memberCount = team?.members.length ?? 0;
@@ -364,23 +378,25 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
               const p = byId.get(w.place_id);
               const who = box.entries.filter((e) => e.place_id === w.place_id);
               const mine = who.filter((e) => e.is_mine).length;
+              const drawnIn = box.results.find((r) => r.place_id === w.place_id)?.round;
+              const pct = drawnIn ? 0 : Math.round((w.weight / total) * 100);
               return (
-                <li key={w.place_id} className="relative overflow-hidden rounded-lg bg-background px-3 py-2">
-                  <span className="absolute inset-y-0 left-0 bg-brand/20" style={{ width: `${(w.weight / total) * 100}%` }} />
+                <li key={w.place_id} className={`relative overflow-hidden rounded-lg bg-background px-3 py-2 ${drawnIn ? "opacity-60" : ""}`}>
+                  <span className="absolute inset-y-0 left-0 bg-brand/20" style={{ width: `${pct}%` }} />
                   <div className="relative flex items-center gap-2">
                     {p && <CategoryDot category={p.category} />}
-                    <button onClick={() => p && onShowPlace(p.id)} className="min-w-0 flex-1 truncate text-left text-sm font-bold">
+                    <button onClick={() => p && onShowPlace(p.id)} className={`min-w-0 flex-1 truncate text-left text-sm font-bold ${drawnIn ? "line-through" : ""}`}>
                       {p?.name ?? "삭제된 가게"}
                     </button>
                     <span className="shrink-0 text-xs font-bold text-brand">
-                      🎟️×{w.weight} · {Math.round((w.weight / total) * 100)}%
+                      🎟️×{w.weight} · {drawnIn ? `${roundLabel(drawnIn)}에 뽑힘` : `${pct}%`}
                     </span>
-                    {mine > 0 && (
+                    {!locked && mine > 0 && (
                       <button onClick={() => void act(() => api.removeEntry(summary.id, w.place_id))} disabled={busy} className="h-6 w-6 shrink-0 rounded-full bg-surface-2 text-sm font-black">
                         −
                       </button>
                     )}
-                    {remaining > 0 && (
+                    {!locked && remaining > 0 && (
                       <button onClick={() => void act(() => api.addEntry(summary.id, w.place_id))} disabled={busy} className="h-6 w-6 shrink-0 rounded-full bg-brand text-sm font-black text-brand-ink">
                         +
                       </button>
@@ -392,8 +408,32 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
             })}
           </ul>
 
-          <p className="mt-4 text-xs font-bold text-muted">{remaining > 0 ? `내가 더 넣을 수 있는 횟수: ${remaining}번` : "넣을 수 있는 만큼 다 넣었어요"}</p>
-          {remaining > 0 && (
+          {locked ? (
+            <div className="mt-4 rounded-lg border border-gold/60 bg-background p-3">
+              <p className="text-xs font-bold text-muted">🎲 추첨 결과 · 다시 뽑으면 뽑힌 가게를 빼고 뽑아요</p>
+              <ol className="mt-1.5 space-y-1">
+                {box.results.map((r, i) => {
+                  const rp = r.place_id ? byId.get(r.place_id) : undefined;
+                  const last = i === box.results.length - 1;
+                  return (
+                    <li key={r.id} className={`flex items-center gap-2 text-sm ${last ? "font-black" : "text-muted line-through"}`}>
+                      <span className="w-8 shrink-0 text-xs font-bold">{roundLabel(r.round)}</span>
+                      <span className="min-w-0 flex-1 truncate">{rp?.name ?? "삭제된 가게"}</span>
+                      {last && (
+                        <button onClick={() => setShow(showOf(box, r, byId))} className="shrink-0 rounded-full border border-line px-2 py-0.5 text-[11px] font-bold">
+                          ▶ 다시 보기
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+              {!team.is_leader && <p className="mt-2 text-xs text-muted">조장이 결정하거나 다시 뽑기를 기다리고 있어요.</p>}
+            </div>
+          ) : (
+            <p className="mt-4 text-xs font-bold text-muted">{remaining > 0 ? `내가 더 넣을 수 있는 횟수: ${remaining}번` : "넣을 수 있는 만큼 다 넣었어요"}</p>
+          )}
+          {!locked && remaining > 0 && (
             <>
               <input
                 value={query}
@@ -427,6 +467,15 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
 
           {team.is_leader && (
             <div className="mt-4 border-t border-line pt-4">
+              {locked && lastPlace && (
+                <button
+                  onClick={() => void act(() => api.decide(summary.id))}
+                  disabled={busy}
+                  className="mb-4 w-full rounded-xl bg-brand py-3 text-lg font-black text-brand-ink shadow-[0_0_30px_rgba(3,199,90,0.3)] disabled:opacity-40"
+                >
+                  ✅ 「{lastPlace.name}」 이걸로 결정
+                </button>
+              )}
               <p className="text-xs font-bold text-muted">연출</p>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {DRAW_ANIMATIONS.map((a) => (
@@ -440,14 +489,29 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
                 ))}
               </div>
               <button
-                onClick={() => void act(() => api.draw(summary.id, animation))}
-                disabled={busy || weights.length < MIN_DRAW_PLACES}
-                className="mt-3 w-full rounded-xl bg-brand py-3 text-lg font-black text-brand-ink shadow-[0_0_30px_rgba(3,199,90,0.3)] disabled:opacity-40"
+                onClick={() =>
+                  void act(async () => {
+                    // 조장 화면은 폴링을 기다리지 않고 응답으로 바로 연출을 띄운다
+                    const { result } = await api.draw(summary.id, animation);
+                    seenResult.current = result.id;
+                    setShow(showOf({ ...box, results: [...box.results, result] }, result, byId));
+                  })
+                }
+                disabled={busy || candidatePlaces < MIN_DRAW_PLACES}
+                className={`mt-3 w-full rounded-xl py-3 font-black disabled:opacity-40 ${
+                  locked ? "border border-line bg-background text-base" : "bg-brand text-lg text-brand-ink shadow-[0_0_30px_rgba(3,199,90,0.3)]"
+                }`}
               >
-                {weights.length < MIN_DRAW_PLACES ? `가게가 ${MIN_DRAW_PLACES}곳 이상 있어야 해요` : "🎲 추첨 시작"}
+                {candidatePlaces < MIN_DRAW_PLACES
+                  ? locked
+                    ? "남은 가게가 1곳뿐이라 다시 뽑을 수 없어요"
+                    : `가게가 ${MIN_DRAW_PLACES}곳 이상 있어야 해요`
+                  : locked
+                    ? `🔁 다시 뽑기 (${lastPlace?.name ?? "뽑힌 가게"} 빼고 ${candidatePlaces}곳)`
+                    : "🎲 추첨 시작"}
               </button>
               <button
-                onClick={() => confirm("추첨통을 취소할까요? 넣은 가게는 모두 사라져요.") && void act(() => api.cancelBox(summary.id))}
+                onClick={() => confirm("추첨통을 취소할까요? 넣은 가게와 뽑은 결과가 모두 사라지고 추첨 기록에도 남지 않아요.") && void act(() => api.cancelBox(summary.id))}
                 disabled={busy}
                 className="mt-2 w-full text-xs font-bold text-muted underline"
               >
@@ -464,13 +528,14 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
           <ul className="mt-2 space-y-1.5">
             {team!.records.map((r, i) => {
               const p = r.result_place_id ? byId.get(r.result_place_id) : undefined;
-              const replay = i === 0 ? showOf(r, byId) : null;
+              const replay = i === 0 ? showOf(r, r.results.at(-1), byId) : null;
               return (
                 <li key={r.id} className={`flex items-center gap-2 rounded-xl px-3 py-2.5 ${i === 0 ? "border border-gold/60 bg-surface" : ""}`}>
                   <span className="w-12 shrink-0 text-xs font-bold text-muted">{r.drawn_at ? new Date(r.drawn_at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" }) : ""}</span>
                   {p && <CategoryDot category={p.category} />}
                   <button onClick={() => p && onShowPlace(p.id)} className="min-w-0 flex-1 truncate text-left text-sm font-bold">
                     {p?.name ?? "삭제된 가게"}
+                    {r.results.length > 1 && <span className="ml-1.5 text-[11px] font-bold text-muted">{roundLabel(r.results.length)}에서 결정</span>}
                   </button>
                   {replay && (
                     <button onClick={() => setShow(replay)} className="shrink-0 rounded-full border border-line px-2.5 py-1 text-xs font-bold hover:bg-surface-2">
@@ -502,10 +567,10 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
 
       {show && (
         <DrawShow
-          animation={show.box.animation!}
+          animation={show.result.animation}
           entries={show.entries}
-          winnerId={show.box.result_place_id!}
-          seed={show.box.id}
+          winnerId={show.result.place_id!}
+          seed={show.result.id}
           onClose={() => setShow(null)}
           onShowPlace={(id) => {
             setShow(null);

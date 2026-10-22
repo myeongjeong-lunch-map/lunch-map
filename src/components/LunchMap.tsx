@@ -286,7 +286,7 @@ export function LunchMap() {
             onTipAdded={onTipAdded}
             openTab={placeTab}
             onOpenTab={(t) => setPlaceTab(t)}
-            drawTeams={(teams ?? []).filter((t) => t.open_box)}
+            drawTeams={(teams ?? []).filter((t) => t.open_box && !t.open_box.locked)}
             onAddToBox={(id) => addToBox(id, selected.id)}
           />
         ) : tab === "rank" ? (

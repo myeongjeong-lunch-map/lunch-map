@@ -1,25 +1,36 @@
 import "server-only";
-import type { DrawBox, DrawLimit, TeamDetail, TeamSummary } from "@/lib/domain";
+import type { DrawBox, DrawLimit, DrawResult, TeamDetail, TeamSummary } from "@/lib/domain";
 import { db } from "./supabase";
 import { HttpError } from "./guard";
 
 // 팀원은 평가와 같은 브라우저 쿠키(lm_voter)로 구분한다 (ADR 0003).
 
 const RECORD_LIMIT = 20;
-const BOX_COLUMNS = "id, team_id, per_member_limit, status, animation, result_place_id, drawn_at, created_at";
+const BOX_COLUMNS = "id, team_id, per_member_limit, status, result_place_id, drawn_at, created_at";
 
-type BoxRow = { id: string; team_id: string; per_member_limit: number; status: DrawBox["status"]; animation: DrawBox["animation"]; result_place_id: string | null; drawn_at: string | null };
+type BoxRow = { id: string; team_id: string; per_member_limit: number; status: DrawBox["status"]; result_place_id: string | null; drawn_at: string | null };
+type ResultRow = DrawResult & { box_id: string };
 
-function toBox(row: BoxRow, entries: DrawBox["entries"]): DrawBox {
+function toBox(row: BoxRow, entries: DrawBox["entries"], results: DrawResult[]): DrawBox {
   return {
     id: row.id,
     per_member_limit: row.per_member_limit as DrawLimit,
     status: row.status,
-    animation: row.animation,
     result_place_id: row.result_place_id,
     drawn_at: row.drawn_at,
     entries,
+    results,
   };
+}
+
+/** 추첨통들의 회차별 결과. 추첨통 ID별로 1회차부터 */
+export async function boxResults(boxIds: string[]): Promise<Map<string, DrawResult[]>> {
+  const out = new Map<string, DrawResult[]>();
+  if (!boxIds.length) return out;
+  const { data, error } = await db().from("draw_results").select("id, box_id, round, place_id, animation, drawn_at").in("box_id", boxIds).order("round");
+  if (error) throw error;
+  for (const { box_id, ...r } of (data ?? []) as ResultRow[]) out.set(box_id, [...(out.get(box_id) ?? []), r]);
+  return out;
 }
 
 export async function listTeams(me: string | null): Promise<TeamSummary[]> {
@@ -51,6 +62,7 @@ export async function listTeams(me: string | null): Promise<TeamSummary[]> {
     for (const e of data ?? []) used.set(e.box_id, (used.get(e.box_id) ?? 0) + 1);
   }
   const boxByTeam = new Map(myBoxes.map((b) => [b.team_id, b]));
+  const results = await boxResults(myBoxes.map((b) => b.id));
 
   return (teams.data ?? []).map((t) => {
     const box = boxByTeam.get(t.id);
@@ -60,7 +72,9 @@ export async function listTeams(me: string | null): Promise<TeamSummary[]> {
       member_count: counts.get(t.id) ?? 0,
       is_member: mine.has(t.id),
       is_leader: !!me && t.leader_id === me,
-      open_box: box ? { id: box.id, remaining: Math.max(0, box.per_member_limit - (used.get(box.id) ?? 0)) } : null,
+      open_box: box
+        ? { id: box.id, remaining: Math.max(0, box.per_member_limit - (used.get(box.id) ?? 0)), locked: (results.get(box.id)?.length ?? 0) > 0 }
+        : null,
     };
   });
 }
@@ -104,6 +118,13 @@ export async function requireOpenBox(teamId: string): Promise<BoxRow> {
   return box;
 }
 
+// 첫 추첨을 한 추첨통은 더 넣거나 뺄 수 없다 (다시 뽑기의 후보가 바뀌지 않도록)
+export async function requireUnlocked(boxId: string): Promise<void> {
+  const { count, error } = await db().from("draw_results").select("id", { count: "exact", head: true }).eq("box_id", boxId);
+  if (error) throw error;
+  if ((count ?? 0) > 0) throw new HttpError(409, "이미 추첨을 해서 가게를 넣거나 뺄 수 없어요.");
+}
+
 export async function boxEntryRows(boxId: string): Promise<{ id: string; member_id: string; place_id: string }[]> {
   const { data, error } = await db().from("draw_entries").select("id, member_id, place_id").eq("box_id", boxId).order("created_at");
   if (error) throw error;
@@ -131,6 +152,7 @@ export async function teamDetail(teamId: string, me: string | null): Promise<Tea
     rows.map((e) => ({ id: e.id, place_id: e.place_id, nickname: nicknames.get(e.member_id) ?? "나간 팀원", is_mine: isMe(e.member_id) }));
   const openEntries = entries(openRows);
   const latestEntries = entries(latestRows);
+  const results = await boxResults([...(open ? [open.id] : []), ...recordRows.map((r) => r.id)]);
 
   return {
     id: team.id,
@@ -138,7 +160,7 @@ export async function teamDetail(teamId: string, me: string | null): Promise<Tea
     members: memberList,
     is_member: memberList.some((m) => m.is_me),
     is_leader: isMe(team.leader_id),
-    open_box: open ? toBox(open, openEntries) : null,
-    records: recordRows.map((r, i) => toBox(r, i === 0 ? latestEntries : [])),
+    open_box: open ? toBox(open, openEntries, results.get(open.id) ?? []) : null,
+    records: recordRows.map((r, i) => toBox(r, i === 0 ? latestEntries : [], results.get(r.id) ?? [])),
   };
 }

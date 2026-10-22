@@ -29,7 +29,7 @@ src/
     admin/                   관리자 화면 (ADMIN_SECRET 로그인)
     api/
       places/                가게 목록·추가, [id]/tips·vote·keywords
-      teams/                 팀 목록·만들기, [id]/members·box(추첨통)·box/entries·box/draw
+      teams/                 팀 목록·만들기, [id]/members·box(추첨통)·box/entries·box/draw(다시 뽑기 포함)·box/decide
       tips/                  꿀팁 피드
       search/, reverse/      네이버 장소 검색, 좌표 → 주소
       cron/walking/          매일 도보 시간 재계산 (Vercel Cron)

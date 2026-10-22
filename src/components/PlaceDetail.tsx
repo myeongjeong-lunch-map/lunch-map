@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
 import { KEYWORDS, MAX_KEYWORDS_PER_PLACE, naverMapUrl, timeAgo, type KeywordKey, type MyVote, type Place, type TeamSummary, type Tip } from "@/lib/domain";
 import type { PlaceTab } from "@/lib/naverPlaceId";
@@ -38,15 +38,25 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
   const [website, setWebsite] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [boxMsg, setBoxMsg] = useState<string | null>(null);
+  const [boxError, setBoxError] = useState<string | null>(null);
+  const [adding, setAdding] = useState<string | null>(null);
+  // 방금 넣은 팀. at은 연달아 넣을 때 효과를 다시 틀기 위한 key
+  const [added, setAdded] = useState<{ teamId: string; at: number } | null>(null);
+  const addSeq = useRef(0);
 
   const addToBox = async (t: TeamSummary) => {
-    setBoxMsg(null);
+    setBoxError(null);
+    setAdding(t.id);
     try {
       await onAddToBox(t.id);
-      setBoxMsg(`${t.name} 추첨통에 넣었어요`);
+      const at = ++addSeq.current;
+      setAdded({ teamId: t.id, at });
+      navigator.vibrate?.(40);
+      setTimeout(() => setAdded((a) => (a?.at === at ? null : a)), 2500);
     } catch (err) {
-      setBoxMsg((err as Error).message);
+      setBoxError((err as Error).message);
+    } finally {
+      setAdding(null);
     }
   };
 
@@ -123,17 +133,29 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
       </div>
       {drawTeams.length > 0 && (
         <div className="mt-2 space-y-1.5">
-          {drawTeams.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => void addToBox(t)}
-              disabled={!t.open_box?.remaining}
-              className="w-full rounded-xl border border-brand/60 py-2.5 text-sm font-bold text-brand hover:bg-brand/10 disabled:opacity-40"
-            >
-              🎟️ {drawTeams.length > 1 ? `${t.name} ` : ""}추첨통에 넣기 {t.open_box?.remaining ? `(남은 ${t.open_box.remaining}번)` : "(다 넣었어요)"}
-            </button>
-          ))}
-          {boxMsg && <p className="text-center text-xs font-bold text-muted">{boxMsg}</p>}
+          {drawTeams.map((t) => {
+            const just = added?.teamId === t.id;
+            const name = drawTeams.length > 1 ? `${t.name} ` : "";
+            const left = t.open_box?.remaining ? `남은 ${t.open_box.remaining}번` : "다 넣었어요";
+            return (
+              <button
+                key={just ? `${t.id}-${added.at}` : t.id}
+                onClick={() => void addToBox(t)}
+                disabled={!t.open_box?.remaining || adding === t.id}
+                className={`relative w-full rounded-xl border py-2.5 text-sm font-bold transition-colors ${
+                  just ? "lm-pop border-brand bg-brand text-brand-ink" : "border-brand/60 text-brand hover:bg-brand/10"
+                } ${just ? "" : "disabled:opacity-40"}`}
+              >
+                {just ? `✓ ${name}추첨통에 쏙! (${left})` : `🎟️ ${name}추첨통에 넣기 (${left})`}
+                {just && (
+                  <span aria-hidden className="lm-float-up pointer-events-none absolute -top-1 right-6 text-lg font-black text-brand">
+                    🎟️+1
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          {boxError && <p className="text-center text-xs font-bold text-danger">{boxError}</p>}
         </div>
       )}
       {place.naver_place_id ? (

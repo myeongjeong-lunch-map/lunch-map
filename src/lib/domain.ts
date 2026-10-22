@@ -115,6 +115,7 @@ export function timeAgo(iso: string): string {
 }
 
 // 추첨: 팀의 추첨통에 든 가게 가운데 하나를 넣은 횟수(가중치)에 비례해 뽑는다. 결과는 서버가 정한다 (ADR 0004).
+// 다시 뽑을 때는 앞 회차에 뽑힌 가게를 빼고, 조장이 결정하면 추첨통이 닫힌다.
 export const DRAW_LIMITS = [1, 2, 3] as const;
 export type DrawLimit = (typeof DRAW_LIMITS)[number];
 export const DRAW_ANIMATIONS = [
@@ -139,8 +140,8 @@ export type TeamSummary = {
   member_count: number;
   is_member: boolean;
   is_leader: boolean;
-  /** 내가 팀원이고 추첨통이 열려 있으면: 추첨통 ID와 내가 더 넣을 수 있는 횟수 */
-  open_box: { id: string; remaining: number } | null;
+  /** 내가 팀원이고 추첨통이 열려 있으면: 추첨통 ID, 내가 더 넣을 수 있는 횟수, 첫 추첨을 해서 더 넣을 수 없는지 */
+  open_box: { id: string; remaining: number; locked: boolean } | null;
 };
 
 // 팀원 ID는 브라우저 쿠키 값이라 화면으로 보내지 않는다. 닉네임과 "나인지"만 보낸다.
@@ -148,14 +149,20 @@ export type TeamMember = { nickname: string; is_leader: boolean; is_me: boolean 
 
 export type DrawEntry = { id: string; place_id: string; nickname: string; is_mine: boolean };
 
+/** 회차 하나의 결과. 1회차가 첫 추첨이고, 다시 뽑을 때마다 늘어난다. */
+export type DrawResult = { id: string; round: number; place_id: string | null; animation: DrawAnimation; drawn_at: string };
+
 export type DrawBox = {
   id: string;
   per_member_limit: DrawLimit;
+  /** drawn: 조장이 결정해서 닫힘(추첨 기록), cancelled: 취소 */
   status: "open" | "drawn" | "cancelled";
-  animation: DrawAnimation | null;
+  /** 결정한 가게와 결정한 시각 (status가 drawn일 때) */
   result_place_id: string | null;
   drawn_at: string | null;
   entries: DrawEntry[];
+  /** 회차별 결과, 1회차부터 */
+  results: DrawResult[];
 };
 
 export type TeamDetail = {
@@ -168,6 +175,12 @@ export type TeamDetail = {
   /** 추첨 기록: 최근에 뽑은 추첨통부터 */
   records: DrawBox[];
 };
+
+/** 다음 회차(또는 주어진 회차)의 후보: 그 앞 회차에 뽑힌 가게를 뺀 추첨통 내용 */
+export function drawCandidates<E extends Pick<DrawEntry, "place_id">>(entries: E[], results: Pick<DrawResult, "round" | "place_id">[], round = results.length + 1): E[] {
+  const drawn = new Set(results.filter((r) => r.round < round).map((r) => r.place_id));
+  return entries.filter((e) => !drawn.has(e.place_id));
+}
 
 /** 추첨통을 가게별 가중치로 묶는다. 많이 넣은 가게부터. */
 export function drawWeights(entries: Pick<DrawEntry, "place_id">[]): { place_id: string; weight: number }[] {

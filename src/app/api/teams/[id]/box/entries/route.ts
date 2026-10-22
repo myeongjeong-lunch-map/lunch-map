@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/server/supabase";
 import { errorResponse, HttpError, readVoterId } from "@/lib/server/guard";
-import { requireMember, requireOpenBox } from "@/lib/server/teams";
+import { requireMember, requireOpenBox, requireUnlocked } from "@/lib/server/teams";
 
 async function myCount(boxId: string, me: string): Promise<number> {
   const { count, error } = await db().from("draw_entries").select("id", { count: "exact", head: true }).eq("box_id", boxId).eq("member_id", me);
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/teams/[id]/
     const me = readVoterId(req);
     await requireMember(id, me);
     const box = await requireOpenBox(id);
+    await requireUnlocked(box.id);
     const over = () => new HttpError(409, `한 사람당 ${box.per_member_limit}번까지 넣을 수 있어요.`);
     if ((await myCount(box.id, me!)) >= box.per_member_limit) throw over();
 
@@ -50,6 +51,7 @@ export async function DELETE(req: NextRequest, ctx: RouteContext<"/api/teams/[id
     const me = readVoterId(req);
     await requireMember(id, me);
     const box = await requireOpenBox(id);
+    await requireUnlocked(box.id);
     const { data, error } = await db().from("draw_entries").select("id").eq("box_id", box.id).eq("member_id", me!).eq("place_id", placeId).limit(1);
     if (error) throw error;
     if (data?.[0]) {

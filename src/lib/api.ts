@@ -1,4 +1,4 @@
-import type { DrawAnimation, DrawLimit, KeywordKey, MyVote, Place, TeamDetail, TeamSummary, Tip } from "./domain";
+import type { DrawAnimation, DrawLimit, DrawResult, KeywordKey, MyVote, Place, TeamDetail, TeamSummary, Tip } from "./domain";
 
 export class ApiError extends Error {
   constructor(
@@ -51,7 +51,8 @@ export const api = {
   cancelBox: (id: string) => request<{ ok: true }>(`/api/teams/${id}/box`, { method: "DELETE" }),
   addEntry: (id: string, placeId: string) => request<{ ok: true }>(`/api/teams/${id}/box/entries`, { method: "POST", body: JSON.stringify({ placeId }) }),
   removeEntry: (id: string, placeId: string) => request<{ ok: true }>(`/api/teams/${id}/box/entries`, { method: "DELETE", body: JSON.stringify({ placeId }) }),
-  draw: (id: string, animation: DrawAnimation) => request<{ ok: true }>(`/api/teams/${id}/box/draw`, { method: "POST", body: JSON.stringify({ animation }) }),
+  draw: (id: string, animation: DrawAnimation) => request<{ result: DrawResult }>(`/api/teams/${id}/box/draw`, { method: "POST", body: JSON.stringify({ animation }) }),
+  decide: (id: string) => request<{ ok: true }>(`/api/teams/${id}/box/decide`, { method: "POST" }),
 };
 
 const NICKNAME_KEY = "lm_nickname";
