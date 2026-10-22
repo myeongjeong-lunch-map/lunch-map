@@ -66,7 +66,7 @@ npm run dev                  # http://localhost:3000
 2. `master`에서 브랜치를 딴다 (`feat/…`, `fix/…`).
 3. 올리기 전에 확인한다.
    ```bash
-   npx tsc --noEmit
+   npm run typecheck
    npm run lint
    npm run build
    ```

@@ -28,7 +28,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: 타입 검사·린트
-        run: npx tsc --noEmit && npm run lint
+        run: npm run typecheck && npm run lint  # typecheck는 Next 라우트 타입(RouteContext 등)을 먼저 생성한다
       - name: Vercel 환경 변수 받기
         run: npx vercel@65.0.0 pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
       - name: 빌드
