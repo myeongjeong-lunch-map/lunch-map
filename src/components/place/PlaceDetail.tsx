@@ -30,9 +30,12 @@ type Props = {
   /** 추첨통이 열려 있는 내 팀들. 비어 있으면 추첨통에 넣기 버튼을 숨긴다. */
   drawTeams: TeamSummary[];
   onAddToBox: (teamId: string) => Promise<void>;
+  /** 🎲 후보로 담았는지 */
+  dicePicked: boolean;
+  onDicePick: () => void;
 };
 
-export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote, onKeywords, onBack, onTipAdded, openTab, onOpenTab, drawTeams, onAddToBox }: Props) {
+export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote, onKeywords, onBack, onTipAdded, openTab, onOpenTab, drawTeams, onAddToBox, dicePicked, onDicePick }: Props) {
   const [tips, setTips] = useState<Tip[] | null>(null);
   const [body, setBody] = useState("");
   const [nickname, setNickname] = useState(loadNickname);
@@ -139,6 +142,12 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
           👎 싫어요 {place.dislikes}
         </button>
       </div>
+      <button
+        onClick={onDicePick}
+        className={`mt-2 w-full rounded-xl py-2.5 text-sm font-bold ${dicePicked ? "bg-brand/15 text-brand" : "bg-surface-2 hover:bg-line"}`}
+      >
+        {dicePicked ? "🎲 후보에 담았어요 · 빼기" : "🎲 오늘 뭐 먹지 후보에 담기"}
+      </button>
       {drawTeams.length > 0 && (
         <div className="mt-2 space-y-1.5">
           {drawTeams.map((t) => {
