@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isCategory, isKeyword, MAX_KEYWORDS_PER_PLACE, type KeywordKey, type MyVote, type Place } from "@/lib/domain";
 import { db } from "@/lib/server/supabase";
 import { cleanText, ensureVoterId, errorResponse, guardWrite, HttpError, readVoterId } from "@/lib/server/guard";
-import { computeWalking } from "@/lib/server/walking";
+import { computePlaceWalking, withFreshWalking } from "@/lib/server/walkingStore";
 import { resolveNaverPlaceId } from "@/lib/naverPlaceId";
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     for (const v of weekLikes.data ?? []) weekly.set(v.place_id, (weekly.get(v.place_id) ?? 0) + 2);
     for (const t of weekTips.data ?? []) weekly.set(t.place_id, (weekly.get(t.place_id) ?? 0) + 1);
 
-    const places: Place[] = (summaries.data ?? []).map((p) => ({ ...p, keywords: keywordCounts.get(p.id) ?? {}, weekly_score: weekly.get(p.id) ?? 0 }));
+    const places: Place[] = (summaries.data ?? []).map((p) => ({ ...withFreshWalking(p), keywords: keywordCounts.get(p.id) ?? {}, weekly_score: weekly.get(p.id) ?? 0 }));
 
     const myVotes: Record<string, MyVote> = {};
     if (voterId) {
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     const naverLink = cleanText(body.naverLink, 500);
     const naverPlaceId = naverLink ? await resolveNaverPlaceId(naverLink) : null;
     if (naverLink && !naverPlaceId) throw new HttpError(400, "네이버 지도 링크에서 가게를 찾지 못했어요. 링크를 확인하거나 비워 두세요.");
-    const walking = await computeWalking(lat, lng);
+    const walking = await computePlaceWalking(lat, lng);
     const { data: place, error } = await db()
       .from("places")
       .insert({
@@ -82,11 +82,7 @@ export async function POST(req: NextRequest) {
         category: body.category,
         naver_category: cleanText(body.naverCategory, 100),
         naver_place_id: naverPlaceId,
-        walking_seconds: walking.seconds,
-        walking_meters: walking.meters,
-        walking_source: walking.source,
-        walking_path: walking.path,
-        walking_updated_at: new Date().toISOString(),
+        ...walking,
       })
       .select("id")
       .single();
