@@ -1,7 +1,7 @@
 "use client";
 
 import { LUNCH_TIGHT_MINUTES, MAX_COURSE_STOPS, WALK_KIND_EMOJI, campusWalk, courseTime, formatMeters, type WalkCourse, type WalkLeg, type WalkSpot } from "@/lib/domain";
-import { Chip } from "./PlaceList";
+import { Chip } from "@/components/place/PlaceList";
 
 type Props = {
   courses: WalkCourse[];

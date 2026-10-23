@@ -20,19 +20,19 @@ import {
   type WalkSpot,
 } from "@/lib/domain";
 import type { PlaceTab } from "@/lib/naverPlaceId";
-import { NaverMap, type MapRoute } from "./NaverMap";
-import { PlaceList, applyFilters, isFiltered, DEFAULT_FILTERS, type Filters } from "./PlaceList";
-import { RankingList } from "./RankingList";
-import { TipFeed } from "./TipFeed";
-import { WalkPanel } from "./WalkPanel";
-import { CourseDetail } from "./CourseDetail";
-import { SpotDetail } from "./SpotDetail";
-import { PlaceDetail } from "./PlaceDetail";
-import { AddPlace } from "./AddPlace";
-import { BottomSheet, type SheetSnap } from "./BottomSheet";
-import { NaverPlacePanel } from "./NaverPlacePanel";
-import { ThemeToggle } from "./ThemeToggle";
-import { DrawTab } from "./DrawTab";
+import { NaverMap, type MapRoute } from "@/components/map/NaverMap";
+import { PlaceList, applyFilters, isFiltered, DEFAULT_FILTERS, type Filters } from "@/components/place/PlaceList";
+import { RankingList } from "@/components/place/RankingList";
+import { TipFeed } from "@/components/place/TipFeed";
+import { WalkPanel } from "@/components/walk/WalkPanel";
+import { CourseDetail } from "@/components/walk/CourseDetail";
+import { SpotDetail } from "@/components/walk/SpotDetail";
+import { PlaceDetail } from "@/components/place/PlaceDetail";
+import { AddPlace } from "@/components/place/AddPlace";
+import { BottomSheet, type SheetSnap } from "@/components/ui/BottomSheet";
+import { NaverPlacePanel } from "@/components/map/NaverPlacePanel";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { DrawTab } from "@/components/draw/DrawTab";
 
 const DESKTOP_QUERY = "(min-width: 768px)";
 

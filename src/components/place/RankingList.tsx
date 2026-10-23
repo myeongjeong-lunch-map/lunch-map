@@ -1,7 +1,7 @@
 "use client";
 
 import { rankPlaces, type Place, type RankingPeriod } from "@/lib/domain";
-import { CategoryDot, Walking } from "./PlaceList";
+import { CategoryDot, Walking } from "@/components/place/PlaceList";
 
 type Props = {
   places: Place[];

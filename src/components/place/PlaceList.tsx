@@ -1,7 +1,7 @@
 "use client";
 
 import { CATEGORIES, KEYWORD_LABEL, KEYWORDS, topKeyword, walkingMinutes, type Category, type KeywordKey, type Place } from "@/lib/domain";
-import { CATEGORY_COLOR, CATEGORY_EMOJI } from "./categoryStyle";
+import { CATEGORY_COLOR, CATEGORY_EMOJI } from "@/components/place/categoryStyle";
 
 export type Filters = {
   category: Category | "all";

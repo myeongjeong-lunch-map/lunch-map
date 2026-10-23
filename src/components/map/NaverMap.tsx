@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { CAMPUS, WALK_KIND_EMOJI, walkingMinutes, type Place, type WalkSpot } from "@/lib/domain";
-import { CATEGORY_EMOJI } from "./categoryStyle";
+import { CATEGORY_EMOJI } from "@/components/place/categoryStyle";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- 네이버 지도 JS SDK는 타입 정의를 제공하지 않는다 */
 declare global {
