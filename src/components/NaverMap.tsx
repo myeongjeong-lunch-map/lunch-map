@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { CAMPUS, walkingMinutes, type Place } from "@/lib/domain";
+import { CAMPUS, WALK_KIND_EMOJI, walkingMinutes, type Place, type WalkSpot } from "@/lib/domain";
 import { CATEGORY_EMOJI } from "./categoryStyle";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- 네이버 지도 JS SDK는 타입 정의를 제공하지 않는다 */
@@ -50,6 +50,47 @@ function routeChip(place: Place): string | null {
   return `${(place.walking_meters / 1000).toFixed(1)}km · 도보 예상 ${minutes}분`;
 }
 
+/** 경로를 그리는 애니메이션과 가운데 칩. 지우는 함수를 돌려준다 */
+function drawRoute(naver: any, m: any, path: LngLat[], opts: { dashed: boolean; chip: string | null }): () => void {
+  const cum = cumulative(path);
+  const toLatLngs = (pts: LngLat[]) => pts.map(([lng, lat]) => new naver.maps.LatLng(lat, lng));
+  const line = new naver.maps.Polyline({
+    map: m,
+    path: toLatLngs(path.slice(0, 1)),
+    strokeColor: "#03c75a",
+    strokeWeight: 6,
+    strokeOpacity: 0.9,
+    strokeStyle: opts.dashed ? "shortdash" : "solid",
+    strokeLineCap: "round",
+    strokeLineJoin: "round",
+    zIndex: 5,
+  });
+  let chip: any = null;
+  if (opts.chip) {
+    const [lng, lat] = slicePath(path, cum, 0.5).at(-1)!;
+    chip = new naver.maps.Marker({
+      map: m,
+      position: new naver.maps.LatLng(lat, lng),
+      icon: { content: `<div class="lm-route-chip">${escapeHtml(opts.chip)}</div>` },
+      zIndex: 150,
+      clickable: false,
+    });
+  }
+  let frame = 0;
+  const start = performance.now();
+  const step = (now: number) => {
+    const t = Math.min(1, (now - start) / ROUTE_DRAW_MS);
+    line.setPath(toLatLngs(slicePath(path, cum, 1 - (1 - t) ** 3)));
+    if (t < 1) frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+  return () => {
+    cancelAnimationFrame(frame);
+    line.setMap(null);
+    chip?.setMap(null);
+  };
+}
+
 let sdkPromise: Promise<any> | null = null;
 
 function loadSdk(): Promise<any> {
@@ -75,8 +116,16 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
+/** 코스·장소 보기에서 그릴 경로. path가 null이면 선은 아직 없다(불러오는 중). stops에 캠퍼스는 넣지 않는다 */
+export type MapRoute = { stops: { lat: number; lng: number }[]; path: [number, number][] | null; dashed: boolean; chip: string | null };
+
 type Props = {
   places: Place[];
+  /** 산책 탭에서 지도에 찍는 산책 장소 */
+  spots: WalkSpot[];
+  selectedSpotId: string | null;
+  onSelectSpot: (id: string) => void;
+  route: MapRoute | null;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   /** 가게 추가 시 핀 직접 꽂기 모드 */
@@ -87,17 +136,18 @@ type Props = {
   bottomInset: number;
 };
 
-export function NaverMap({ places, selectedId, onSelect, pickMode, picked, onPick, bottomInset }: Props) {
+export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, selectedId, onSelect, pickMode, picked, onPick, bottomInset }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
   const pickMarker = useRef<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const handlers = useRef({ onSelect, onPick, pickMode });
+  const spotMarkers = useRef<Map<string, any>>(new Map());
+  const handlers = useRef({ onSelect, onSelectSpot, onPick, pickMode, bottomInset });
 
   useEffect(() => {
-    handlers.current = { onSelect, onPick, pickMode };
+    handlers.current = { onSelect, onSelectSpot, onPick, pickMode, bottomInset };
   });
 
   useEffect(() => {
@@ -192,9 +242,7 @@ export function NaverMap({ places, selectedId, onSelect, pickMode, picked, onPic
     if (m.getZoom() > LABEL_ZOOM) m.setZoom(LABEL_ZOOM);
 
     let cancelled = false;
-    let frame = 0;
-    let line: any = null;
-    let chip: any = null;
+    let clear: (() => void) | null = null;
     api
       .placePath(p.id)
       .then((r) => r.path)
@@ -202,47 +250,76 @@ export function NaverMap({ places, selectedId, onSelect, pickMode, picked, onPic
       .then((stored) => {
         if (cancelled) return;
         const path: LngLat[] = [[CAMPUS.lng, CAMPUS.lat], ...(stored ?? []), [p.lng, p.lat]];
-        const cum = cumulative(path);
-        const toLatLngs = (pts: LngLat[]) => pts.map(([lng, lat]) => new naver.maps.LatLng(lat, lng));
-        line = new naver.maps.Polyline({
-          map: m,
-          path: toLatLngs(path.slice(0, 1)),
-          strokeColor: "#03c75a",
-          strokeWeight: 6,
-          strokeOpacity: 0.9,
-          strokeStyle: stored ? "solid" : "shortdash",
-          strokeLineCap: "round",
-          strokeLineJoin: "round",
-          zIndex: 5,
-        });
-        const text = routeChip(p);
-        if (text) {
-          const [lng, lat] = slicePath(path, cum, 0.5).at(-1)!;
-          chip = new naver.maps.Marker({
-            map: m,
-            position: new naver.maps.LatLng(lat, lng),
-            icon: { content: `<div class="lm-route-chip">${escapeHtml(text)}</div>` },
-            zIndex: 150,
-            clickable: false,
-          });
-        }
-        const start = performance.now();
-        const step = (now: number) => {
-          const t = Math.min(1, (now - start) / ROUTE_DRAW_MS);
-          line.setPath(toLatLngs(slicePath(path, cum, 1 - (1 - t) ** 3)));
-          if (t < 1) frame = requestAnimationFrame(step);
-        };
-        frame = requestAnimationFrame(step);
+        clear = drawRoute(naver, m, path, { dashed: !stored, chip: routeChip(p) });
       });
     return () => {
       cancelled = true;
-      cancelAnimationFrame(frame);
-      line?.setMap(null);
-      chip?.setMap(null);
+      clear?.();
     };
     // places가 바뀔 때마다 다시 그리지 않도록 선택이 바뀔 때만 실행한다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, ready]);
+
+  // 산책 장소 마커. 지금 보는 코스 안의 장소는 이모지 자리에 순서 번호를 단다
+  useEffect(() => {
+    const naver = window.naver;
+    if (!ready || !naver?.maps || !map.current) return;
+    const order = new Map<string, number>();
+    route?.stops.forEach((st, i) => order.set(`${st.lat},${st.lng}`, i + 1));
+    const seen = new Set<string>();
+    for (const sp of spots) {
+      seen.add(sp.id);
+      const selected = sp.id === selectedSpotId;
+      const n = order.get(`${sp.lat},${sp.lng}`);
+      const content = `<div class="lm-marker spot${selected ? " selected" : ""}"><span class="emoji">${n ?? WALK_KIND_EMOJI[sp.kind]}</span><span class="label">${escapeHtml(sp.name)}</span></div>`;
+      const existing = spotMarkers.current.get(sp.id);
+      if (existing) {
+        existing.setIcon({ content });
+        existing.setZIndex(selected ? 100 : 20);
+      } else {
+        const mk = new naver.maps.Marker({
+          map: map.current,
+          position: new naver.maps.LatLng(sp.lat, sp.lng),
+          icon: { content },
+          zIndex: selected ? 100 : 20,
+        });
+        naver.maps.Event.addListener(mk, "click", () => handlers.current.onSelectSpot(sp.id));
+        spotMarkers.current.set(sp.id, mk);
+      }
+    }
+    for (const [id, mk] of spotMarkers.current) {
+      if (!seen.has(id)) {
+        mk.setMap(null);
+        spotMarkers.current.delete(id);
+      }
+    }
+  }, [spots, selectedSpotId, route, ready]);
+
+  // 산책 탭에 들어오면 캠퍼스와 모든 산책 장소가 보이게 맞춘다 (코스·장소 보기 중이면 아래 경로 효과가 맞춘다)
+  const hasRoute = !!route;
+  useEffect(() => {
+    const naver = window.naver;
+    if (!ready || !naver?.maps || !map.current || hasRoute || spots.length === 0) return;
+    const campus = new naver.maps.LatLng(CAMPUS.lat, CAMPUS.lng);
+    const bounds = new naver.maps.LatLngBounds(campus, campus);
+    for (const sp of spots) bounds.extend(new naver.maps.LatLng(sp.lat, sp.lng));
+    map.current.fitBounds(bounds, { top: 80, right: 60, bottom: 80 + handlers.current.bottomInset, left: 60 });
+  }, [spots, hasRoute, ready]);
+
+  // 산책 코스·장소 보기: 경로 전체가 보이게 맞추고, 초록 경로를 그린다
+  useEffect(() => {
+    const naver = window.naver;
+    if (!ready || !naver?.maps || !map.current || !route) return;
+    const m = map.current;
+    const campus = new naver.maps.LatLng(CAMPUS.lat, CAMPUS.lng);
+    const bounds = new naver.maps.LatLngBounds(campus, campus);
+    for (const st of route.stops) bounds.extend(new naver.maps.LatLng(st.lat, st.lng));
+    for (const [lng, lat] of route.path ?? []) bounds.extend(new naver.maps.LatLng(lat, lng));
+    m.fitBounds(bounds, { top: 80, right: 60, bottom: 80 + handlers.current.bottomInset, left: 60 });
+    if (m.getZoom() > LABEL_ZOOM) m.setZoom(LABEL_ZOOM);
+    if (!route.path || route.path.length < 2) return;
+    return drawRoute(naver, m, route.path, { dashed: route.dashed, chip: route.chip });
+  }, [route, ready]);
 
   // 핀 직접 꽂기 마커
   useEffect(() => {

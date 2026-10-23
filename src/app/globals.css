@@ -128,6 +128,16 @@ body {
 .lm-marker.campus .emoji {
   background: var(--background);
 }
+/* 산책 장소 마커: 브랜드색 테두리로 가게 마커와 구분 */
+.lm-marker.spot {
+  border-color: var(--brand);
+  background: var(--background);
+  color: var(--foreground);
+}
+.lm-marker.spot.selected {
+  background: var(--brand);
+  color: var(--brand-ink);
+}
 .lm-marker.pick {
   border-color: var(--danger);
   background: var(--danger);
@@ -160,11 +170,11 @@ body {
 }
 
 /* 멀리서 볼 때: 이름표를 숨기고 아이콘만 (선택한 가게와 캠퍼스는 항상 이름 표시) */
-.lm-compact .lm-marker:not(.selected):not(.campus):not(.pick) {
+.lm-compact .lm-marker:not(.selected):not(.campus):not(.pick):not(.spot) {
   padding: 3px;
   gap: 0;
 }
-.lm-compact .lm-marker:not(.selected):not(.campus):not(.pick) .label {
+.lm-compact .lm-marker:not(.selected):not(.campus):not(.pick):not(.spot) .label {
   display: none;
 }
 

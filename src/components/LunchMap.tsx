@@ -1,13 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { api } from "@/lib/api";
-import { rankPlaces, type KeywordKey, type MyVote, type Place, type RankingPeriod, type TeamSummary, type Tip } from "@/lib/domain";
+import { api, loadWalkDraft, saveWalkDraft, type WalkResponse } from "@/lib/api";
+import {
+  CAMPUS,
+  MAX_COURSE_STOPS,
+  courseTime,
+  formatMeters,
+  legKey,
+  rankPlaces,
+  type KeywordKey,
+  type MyVote,
+  type Place,
+  type RankingPeriod,
+  type TeamSummary,
+  type Tip,
+  type WalkCourseStop,
+  type WalkLeg,
+  type WalkSpot,
+} from "@/lib/domain";
 import type { PlaceTab } from "@/lib/naverPlaceId";
-import { NaverMap } from "./NaverMap";
+import { NaverMap, type MapRoute } from "./NaverMap";
 import { PlaceList, applyFilters, isFiltered, DEFAULT_FILTERS, type Filters } from "./PlaceList";
 import { RankingList } from "./RankingList";
 import { TipFeed } from "./TipFeed";
+import { WalkPanel } from "./WalkPanel";
+import { CourseDetail } from "./CourseDetail";
+import { SpotDetail } from "./SpotDetail";
 import { PlaceDetail } from "./PlaceDetail";
 import { AddPlace } from "./AddPlace";
 import { BottomSheet, type SheetSnap } from "./BottomSheet";
@@ -29,14 +48,23 @@ function useIsDesktop(): boolean {
   );
 }
 
-type Tab = "rank" | "list" | "tips" | "draw";
-const TAB_LABEL: Record<Tab, string> = { rank: "🏆 랭킹", list: "📍 목록", tips: "💡 꿀팁", draw: "🎟️ 추첨" };
+type Tab = "rank" | "list" | "tips" | "draw" | "walk";
+const TAB_LABEL: Record<Tab, string> = { rank: "🏆 랭킹", list: "📍 목록", tips: "💡 꿀팁", draw: "🎟️ 추첨", walk: "🚶 산책" };
 
 // 추첨 탭에서 마지막으로 본 팀. 초대 링크(/?team=…)로 들어오면 그 팀을 연다.
 const TEAM_KEY = "lm_team";
 
 // detail.tab: 네이버 플레이스(메뉴·사진·리뷰) 패널이 열려 있으면 그 탭
-type Mode = { kind: "browse" } | { kind: "detail"; id: string; tab?: PlaceTab } | { kind: "add" };
+// spot: 산책 장소 보기, course: 산책 코스 보기 (courseId가 null이면 내 코스)
+type Mode =
+  | { kind: "browse" }
+  | { kind: "detail"; id: string; tab?: PlaceTab }
+  | { kind: "add" }
+  | { kind: "spot"; id: string }
+  | { kind: "course"; courseId: string | null };
+
+/** 코스·장소 보기에서 불러온 구간별 경로. key는 어느 장소들의 경로인지 (늦게 온 응답을 거르는 데 쓴다). legs가 null이면 불러오지 못한 것 */
+type WalkPathState = { key: string; legs: { path: [number, number][] | null }[] | null };
 
 export function LunchMap() {
   const isDesktop = useIsDesktop();
@@ -56,6 +84,11 @@ export function LunchMap() {
   const [teams, setTeams] = useState<TeamSummary[] | null>(null);
   const [teamsError, setTeamsError] = useState<string | null>(null);
   const [teamId, setTeamIdState] = useState<string | null>(null);
+  const [walk, setWalk] = useState<WalkResponse | null>(null);
+  const [walkError, setWalkError] = useState<string | null>(null);
+  const [walkDraft, setWalkDraft] = useState<string[]>([]);
+  const [walkMaxMinutes, setWalkMaxMinutes] = useState<30 | 45 | null>(null);
+  const [walkPath, setWalkPath] = useState<WalkPathState | null>(null);
   const queue = useRef(new Map<string, Promise<unknown>>());
 
   const reload = useCallback(async () => {
@@ -76,6 +109,16 @@ export function LunchMap() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    // 마운트 시 산책 장소·코스를 불러오고, 이 브라우저에 기억해 둔 내 코스를 연다 (localStorage는 서버 렌더 때 읽을 수 없다)
+    api
+      .walk()
+      .then((data) => setWalk(data))
+      .catch((e: Error) => setWalkError(e.message));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWalkDraft(loadWalkDraft());
+  }, []);
 
   const reloadTeams = useCallback(async () => {
     try {
@@ -121,6 +164,92 @@ export function LunchMap() {
   };
 
   const all = useMemo(() => places ?? [], [places]);
+
+  // 산책: 장소·추천 코스·구간 (코스 시간은 courseTime이 구간을 더해서 구한다)
+  const walkSpotList = useMemo(() => walk?.spots ?? [], [walk]);
+  const spotMap = useMemo(() => new Map<string, WalkSpot>(walkSpotList.map((sp) => [sp.id, sp])), [walkSpotList]);
+  const legMap = useMemo(() => new Map<string, WalkLeg>((walk?.legs ?? []).map((l) => [legKey(l.a, l.b), l])), [walk]);
+  // 지워진 장소가 내 코스에 남아 있으면 화면에서 거른다
+  const draftIds = useMemo(() => walkDraft.filter((id) => spotMap.has(id)), [walkDraft, spotMap]);
+  const draftStops = useMemo<WalkCourseStop[]>(() => draftIds.map((id) => ({ spot_id: id, stay_minutes: null })), [draftIds]);
+  const draftSet = useMemo(() => new Set(draftIds), [draftIds]);
+  const draftTime = useMemo(() => courseTime(draftStops, spotMap, legMap), [draftStops, spotMap, legMap]);
+  const openedCourse = mode.kind === "course" ? (mode.courseId === null ? null : (walk?.courses.find((c) => c.id === mode.courseId) ?? undefined)) : undefined;
+  const courseStops = useMemo<WalkCourseStop[]>(
+    () => (mode.kind !== "course" ? [] : openedCourse === null ? draftStops : (openedCourse?.stops.filter((st) => spotMap.has(st.spot_id)) ?? [])),
+    [mode.kind, openedCourse, draftStops, spotMap],
+  );
+  const openedSpot = mode.kind === "spot" ? (spotMap.get(mode.id) ?? null) : null;
+  const routeIds = useMemo(() => (mode.kind === "spot" ? (openedSpot ? [openedSpot.id] : []) : courseStops.map((st) => st.spot_id)), [mode.kind, openedSpot, courseStops]);
+  const routeKey = routeIds.join(",");
+  const openedTime = useMemo(() => courseTime(courseStops, spotMap, legMap), [courseStops, spotMap, legMap]);
+
+  useEffect(() => {
+    // 코스·장소를 볼 때 구간별 경로를 받는다. 다른 코스로 바뀌면 늦게 온 응답은 버린다
+    if (!routeKey) return;
+    let cancelled = false;
+    api
+      .walkPath(routeKey.split(","))
+      .then((r) => !cancelled && setWalkPath({ key: routeKey, legs: r.legs }))
+      .catch(() => !cancelled && setWalkPath({ key: routeKey, legs: null }));
+    return () => {
+      cancelled = true;
+    };
+  }, [routeKey]);
+
+  const mapRoute = useMemo<MapRoute | null>(() => {
+    if (routeIds.length === 0) return null;
+    const spotsOnRoute = routeIds.map((id) => spotMap.get(id)!);
+    // 아직 받는 중이면 마커와 지도 맞춤만 하고 선은 나중에 그린다
+    if (walkPath?.key !== routeKey) return { stops: spotsOnRoute, path: null, dashed: false, chip: null };
+    const points = [CAMPUS, ...spotsOnRoute, CAMPUS];
+    // 장소 보기는 캠퍼스 → 장소 한 구간만 그린다
+    const legCount = mode.kind === "spot" ? 1 : points.length - 1;
+    const stored = walkPath.legs ?? [];
+    const path: [number, number][] = [];
+    let dashed = false;
+    for (let i = 0; i < legCount; i++) {
+      const from = points[i];
+      const to = points[i + 1];
+      const p = stored[i]?.path ?? null;
+      if (!p) dashed = true;
+      path.push([from.lng, from.lat], ...(p ?? []), [to.lng, to.lat]);
+    }
+    let chip: string | null;
+    if (mode.kind === "spot") {
+      const l = legMap.get(legKey(null, routeIds[0]));
+      chip = l ? `${formatMeters(l.meters)} · 걸어서 ${l.source === "tmap" ? "" : "약 "}${Math.max(1, Math.round(l.seconds / 60))}분` : null;
+    } else {
+      chip = `${formatMeters(openedTime.meters)} · ${openedTime.rough ? "약 " : ""}${openedTime.totalMinutes}분`;
+    }
+    return { stops: spotsOnRoute, path, dashed, chip };
+  }, [routeIds, routeKey, walkPath, mode.kind, spotMap, legMap, openedTime]);
+
+  const updateDraft = (ids: string[]) => {
+    setWalkDraft(ids);
+    saveWalkDraft(ids);
+  };
+  const draftFull = draftIds.length >= MAX_COURSE_STOPS;
+  const toggleDraftSpot = (id: string) => {
+    if (draftSet.has(id)) updateDraft(draftIds.filter((x) => x !== id));
+    else if (!draftFull) updateDraft([...draftIds, id]);
+  };
+  const moveDraftSpot = (index: number, delta: -1 | 1) => {
+    const to = index + delta;
+    if (to < 0 || to >= draftIds.length) return;
+    const next = [...draftIds];
+    [next[index], next[to]] = [next[to], next[index]];
+    updateDraft(next);
+  };
+  const raiseSheet = () => setSnap((s) => (s === "peek" ? "half" : s));
+  const openSpot = (id: string) => {
+    setMode({ kind: "spot", id });
+    raiseSheet();
+  };
+  const openCourse = (courseId: string | null) => {
+    setMode({ kind: "course", courseId });
+    raiseSheet();
+  };
   const listed = useMemo(() => applyFilters(all, filters), [all, filters]);
   const latestTip = useMemo(() => {
     const m: Record<string, string> = {};
@@ -233,7 +362,27 @@ export function LunchMap() {
             <ThemeToggle />
           </div>
         </div>
-        {mode.kind !== "add" && (
+        {mode.kind !== "add" && tab === "walk" && (
+          <div className="mt-3 flex items-center gap-2 rounded-2xl bg-surface px-3.5 py-3 text-sm">
+            {draftStops.length === 0 ? (
+              <span className="text-muted">🚶 장소를 골라 내 코스를 짜 보세요</span>
+            ) : (
+              <>
+                <span className="min-w-0 flex-1 truncate font-bold">
+                  내 코스 {draftStops.length}곳 · {draftTime.rough ? "약 " : ""}
+                  {draftTime.totalMinutes}분
+                </span>
+                <button onClick={() => openCourse(null)} className="shrink-0 rounded-full bg-brand px-3 py-1 text-xs font-black text-brand-ink">
+                  보기
+                </button>
+                <button onClick={() => updateDraft([])} className="shrink-0 text-xs font-bold text-muted hover:text-foreground">
+                  비우기
+                </button>
+              </>
+            )}
+          </div>
+        )}
+        {mode.kind !== "add" && tab !== "walk" && (
           <button
             onClick={roll}
             disabled={!pool.length}
@@ -243,7 +392,7 @@ export function LunchMap() {
           </button>
         )}
         {mode.kind === "browse" && (
-          <div className="mt-3 grid grid-cols-4 rounded-xl bg-surface p-1 text-sm font-bold">
+          <div className="mt-3 grid grid-cols-5 rounded-xl bg-surface p-1 text-xs font-bold">
             {(Object.keys(TAB_LABEL) as Tab[]).map((k) => (
               <button key={k} onClick={() => setTab(k)} className={`rounded-lg py-2 ${tab === k ? "bg-foreground text-background" : "text-muted"}`}>
                 {TAB_LABEL[k]}
@@ -289,6 +438,63 @@ export function LunchMap() {
             drawTeams={(teams ?? []).filter((t) => t.open_box && !t.open_box.locked)}
             onAddToBox={(id) => addToBox(id, selected.id)}
           />
+        ) : mode.kind === "course" ? (
+          <CourseDetail
+            key={mode.courseId ?? "draft"}
+            name={openedCourse === null ? null : (openedCourse?.name ?? "산책 코스")}
+            summary={openedCourse?.summary ?? null}
+            stops={courseStops}
+            spots={spotMap}
+            time={openedTime}
+            backLabel={`${TAB_LABEL[tab].split(" ")[1]}으로`}
+            onBack={() => setMode({ kind: "browse" })}
+            onOpenSpot={openSpot}
+            onMove={openedCourse === null ? moveDraftSpot : undefined}
+            onRemove={openedCourse === null ? toggleDraftSpot : undefined}
+            onCopy={
+              openedCourse
+                ? () => {
+                    updateDraft(courseStops.map((st) => st.spot_id));
+                    openCourse(null);
+                  }
+                : undefined
+            }
+          />
+        ) : mode.kind === "spot" ? (
+          openedSpot ? (
+            <SpotDetail
+              key={openedSpot.id}
+              spot={openedSpot}
+              legs={legMap}
+              backLabel={`${TAB_LABEL[tab].split(" ")[1]}으로`}
+              inDraft={draftSet.has(openedSpot.id)}
+              draftFull={draftFull}
+              onToggleDraft={() => toggleDraftSpot(openedSpot.id)}
+              onBack={() => setMode({ kind: "browse" })}
+            />
+          ) : (
+            <p className="p-6 text-center text-sm text-muted">산책 장소를 찾을 수 없어요.</p>
+          )
+        ) : tab === "walk" ? (
+          walkError ? (
+            <p className="p-6 text-center text-sm text-danger">{walkError}</p>
+          ) : !walk ? (
+            <p className="p-6 text-center text-sm text-muted">불러오는 중…</p>
+          ) : (
+            <WalkPanel
+              courses={walk.courses}
+              spots={spotMap}
+              spotList={walkSpotList}
+              legs={legMap}
+              draft={draftSet}
+              draftFull={draftFull}
+              maxMinutes={walkMaxMinutes}
+              onMaxMinutes={setWalkMaxMinutes}
+              onOpenCourse={openCourse}
+              onOpenSpot={openSpot}
+              onToggleSpot={toggleDraftSpot}
+            />
+          )
         ) : tab === "rank" ? (
           <RankingList places={all} period={period} onPeriod={setPeriod} onSelect={select} />
         ) : tab === "list" ? (
@@ -321,7 +527,11 @@ export function LunchMap() {
       {!isDesktop && naverPanel && <div className="fixed inset-0 z-[1000] bg-background pt-[env(safe-area-inset-top)]">{naverPanel}</div>}
       <main className="relative h-full flex-1">
         <NaverMap
-          places={mapPlaces}
+          places={tab === "walk" ? [] : mapPlaces}
+          spots={tab === "walk" ? walkSpotList : []}
+          selectedSpotId={mode.kind === "spot" ? mode.id : null}
+          onSelectSpot={openSpot}
+          route={tab === "walk" ? mapRoute : null}
           selectedId={selectedId}
           onSelect={select}
           pickMode={pickMode}
