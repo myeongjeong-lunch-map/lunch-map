@@ -2,12 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
-import { KEYWORDS, MAX_KEYWORDS_PER_PLACE, naverMapUrl, timeAgo, type KeywordKey, type MyVote, type Place, type TeamSummary, type Tip } from "@/lib/domain";
+import { KEYWORDS, MAX_KEYWORDS_PER_PLACE, naverMapUrl, timeAgo, type KeywordKey, type LunchCourse, type MyVote, type Place, type TeamSummary, type Tip } from "@/lib/domain";
 import { canPutIntoBox } from "@/lib/drawBox";
 import { isGhost } from "@/lib/halloween";
 import type { PlaceTab } from "@/lib/naverPlaceId";
 import { CATEGORY_COLOR, CATEGORY_EMOJI } from "@/components/place/categoryStyle";
 import { CategoryDot, Walking } from "@/components/place/PlaceList";
+import { LunchCourseList } from "@/components/walk/LunchCourseList";
+import { useLunchCourses } from "@/components/walk/useLunchCourses";
+import type { WalkMap } from "@/components/walk/useWalkMap";
 
 const NAVER_TABS: { key: PlaceTab; label: string }[] = [
   { key: "menu", label: "📋 메뉴판" },
@@ -36,9 +39,13 @@ type Props = {
   onDicePick: () => void;
   /** 할로윈 이벤트 기간이면 유령 가게 안내를 띄운다 */
   halloween?: boolean;
+  /** 이 가게의 점심 코스(먹고 걷기·포장해서 먹기)를 그리는 데 쓴다 */
+  walk: WalkMap;
+  onOpenLunch: (course: LunchCourse) => void;
 };
 
-export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote, onKeywords, onBack, onTipAdded, openTab, onOpenTab, drawTeams, onAddToBox, dicePicked, onDicePick, halloween = false }: Props) {
+export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote, onKeywords, onBack, onTipAdded, openTab, onOpenTab, drawTeams, onAddToBox, dicePicked, onDicePick, halloween = false, walk, onOpenLunch }: Props) {
+  const { courses: lunch } = useLunchCourses(walk, [place], "all");
   const [tips, setTips] = useState<Tip[] | null>(null);
   const [body, setBody] = useState("");
   const [nickname, setNickname] = useState(loadNickname);
@@ -130,6 +137,12 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
         {place.walking_meters != null && ` · ${place.walking_meters.toLocaleString()}m`}
       </p>
       <p className="text-sm text-muted/70">{place.road_address}</p>
+      {lunch.length > 0 && (
+        <section className="mt-4">
+          <h3 className="pb-1.5 text-sm font-black">🍱 이 집에서 먹고 산책하려면</h3>
+          <LunchCourseList courses={lunch} limit={3} compact onOpen={onOpenLunch} />
+        </section>
+      )}
       {halloween && (
         <p className={`mt-3 rounded-xl px-3 py-2.5 text-sm font-bold ${isGhost(place) ? "bg-surface-2" : "bg-brand/15 text-brand"}`}>
           {isGhost(place) ? "👻 이 가게엔 유령이 살아요. 아래에 꿀팁을 남기면 퇴치돼요!" : `🎃 유령 퇴치 완료! 이벤트 꿀팁 ${place.event_tips}개`}

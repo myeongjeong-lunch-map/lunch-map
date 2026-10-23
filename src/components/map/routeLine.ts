@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import { CAMPUS, formatMeters, type CourseTime, type Place, type WalkLeg, type WalkSpot } from "@/lib/domain";
+import { CAMPUS, formatMeters, type CourseTime, type LunchCourse, type Place, type WalkLeg, type WalkSpot } from "@/lib/domain";
 
 /**
  * 지도에 그릴 경로 하나. 가게 경로선이든 산책 경로선이든 이 모양으로 만들어 NaverMap에 넘긴다.
@@ -8,8 +8,9 @@ import { CAMPUS, formatMeters, type CourseTime, type Place, type WalkLeg, type W
  * - path: 선을 이루는 점(경도, 위도). null이면 아직 받는 중이라 선은 나중에 그린다
  * - dashed: 저장된 보행 경로가 없어 직선으로 대신한 구간이 있으면 true
  * - chip: 선 가운데에 띄우는 "거리 · 도보 N분" 문구. 없으면 null
+ * - numbered: false면 산책 장소 마커에 순서 번호를 달지 않는다 (점심 코스: 가게 하나, 장소 하나)
  */
-export type RouteLine = { stops: { lat: number; lng: number }[]; path: [number, number][] | null; dashed: boolean; chip: string | null };
+export type RouteLine = { stops: { lat: number; lng: number }[]; path: [number, number][] | null; dashed: boolean; chip: string | null; numbered?: boolean };
 
 type LngLat = [number, number];
 const CAMPUS_POINT: LngLat = [CAMPUS.lng, CAMPUS.lat];
@@ -99,4 +100,35 @@ export function useWalkRouteLine({ stopIds, spots, time, leg, oneWay }: WalkRout
     }
     return { stops: onRoute, path, dashed, chip };
   }, [key, spots, stored, oneWay, chip]);
+}
+
+/** 점심 코스 경로선: 캠퍼스 → 가게 → 산책 장소 → 캠퍼스. 가게 → 장소 좌표가 없으면(크론이 그 쌍을 계산하기 전) 그 구간만 직선으로 이어 점선으로 그린다 */
+export function useLunchRouteLine(course: LunchCourse | null): RouteLine | null {
+  const placeId = course?.place.id;
+  const spotId = course?.spot.id;
+  const mode = course?.mode;
+  const key = placeId && spotId && mode ? `${placeId}|${spotId}|${mode}` : null;
+  const stored = useLoaded(key, async () => (await api.lunchPath(placeId!, spotId!, mode!)).legs);
+
+  // 평가·꿀팁이 바뀌어 가게 객체가 새로 만들어져도 선을 다시 그리지 않도록 좌표를 값으로 뽑아 의존한다
+  const [placeLat, placeLng, spotLat, spotLng] = [course?.place.lat, course?.place.lng, course?.spot.lat, course?.spot.lng];
+  // 칩 문구도 값으로 뽑는다
+  const chip = course ? routeChip(course.legs.reduce((n, l) => n + l.meters, 0), course.legs.reduce((n, l) => n + l.seconds, 0), course.rough) : null;
+  return useMemo(() => {
+    if (!key || placeLat == null || placeLng == null || spotLat == null || spotLng == null) return null;
+    const place = { lat: placeLat, lng: placeLng };
+    const spot = { lat: spotLat, lng: spotLng };
+    const stops = [place, spot];
+    // 아직 받는 중이면 마커와 지도 맞춤만 하고 선은 나중에 그린다
+    if (stored === undefined) return { stops, path: null, dashed: false, chip: null, numbered: false };
+    const points = [CAMPUS, place, spot, CAMPUS];
+    const path: LngLat[] = [];
+    let dashed = false;
+    for (let i = 0; i < 3; i++) {
+      const p = stored?.[i]?.path ?? null;
+      if (!p) dashed = true;
+      path.push([points[i].lng, points[i].lat], ...(p ?? []), [points[i + 1].lng, points[i + 1].lat]);
+    }
+    return { stops, path, dashed, chip, numbered: false };
+  }, [key, placeLat, placeLng, spotLat, spotLng, stored, chip]);
 }

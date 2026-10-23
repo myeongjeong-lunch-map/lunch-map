@@ -1,4 +1,4 @@
-import type { DrawAnimation, DrawLimit, DrawResult, KeywordKey, MyVote, Place, TeamDetail, TeamSummary, Tip, WalkCourse, WalkLeg, WalkSpot } from "./domain";
+import type { DrawAnimation, DrawLimit, DrawResult, KeywordKey, LunchMode, MyVote, Place, PlaceLeg, TeamDetail, TeamSummary, Tip, WalkCourse, WalkLeg, WalkSpot } from "./domain";
 
 export class ApiError extends Error {
   constructor(
@@ -25,9 +25,12 @@ export type SearchResult = { name: string; roadAddress: string; naverCategory: s
 
 export type PlacesResponse = { places: Place[]; myVotes: Record<string, MyVote>; myKeywords: Record<string, KeywordKey[]> };
 
-export type WalkResponse = { spots: WalkSpot[]; courses: WalkCourse[]; legs: WalkLeg[] };
+export type WalkResponse = { spots: WalkSpot[]; courses: WalkCourse[]; legs: WalkLeg[]; placeLegs: PlaceLeg[] };
 
 export type WalkPathResponse = { legs: { path: [number, number][] | null }[] };
+
+/** 점심 코스의 세 구간 경로: 캠퍼스 → 가게, 가게 → 산책 장소, 산책 장소 → 캠퍼스 */
+export type LunchPathResponse = WalkPathResponse;
 
 export const api = {
   places: () => request<PlacesResponse>("/api/places"),
@@ -35,6 +38,7 @@ export const api = {
   placePath: (placeId: string) => request<{ path: [number, number][] | null }>(`/api/places/${placeId}/path`),
   walk: () => request<WalkResponse>("/api/walk"),
   walkPath: (stopIds: string[]) => request<WalkPathResponse>(`/api/walk/path?stops=${stopIds.join(",")}`),
+  lunchPath: (placeId: string, spotId: string, mode: LunchMode) => request<LunchPathResponse>(`/api/walk/lunch-path?place=${placeId}&spot=${spotId}&mode=${mode}`),
   tips: (placeId: string) => request<{ tips: Tip[] }>(`/api/places/${placeId}/tips`),
   recentTips: () => request<{ tips: Tip[] }>("/api/tips?limit=60"),
   addTip: (placeId: string, body: Record<string, unknown>) => request<{ tip: Tip }>(`/api/places/${placeId}/tips`, { method: "POST", body: JSON.stringify(body) }),
@@ -96,6 +100,25 @@ export function saveWalkDraft(ids: string[]): void {
   try {
     if (ids.length) localStorage.setItem(WALK_DRAFT_KEY, JSON.stringify(ids));
     else localStorage.removeItem(WALK_DRAFT_KEY);
+  } catch {
+    // 저장 못 해도 동작에는 문제 없음
+  }
+}
+
+// 점심 코스에서 마지막으로 고른 방식도 이 브라우저에만 기억한다
+const LUNCH_MODE_KEY = "lm_lunch_mode";
+
+export function loadLunchMode(): LunchMode {
+  try {
+    return localStorage.getItem(LUNCH_MODE_KEY) === "takeout" ? "takeout" : "dine";
+  } catch {
+    return "dine";
+  }
+}
+
+export function saveLunchMode(mode: LunchMode): void {
+  try {
+    localStorage.setItem(LUNCH_MODE_KEY, mode);
   } catch {
     // 저장 못 해도 동작에는 문제 없음
   }

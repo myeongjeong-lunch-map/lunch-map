@@ -1,13 +1,13 @@
 import "server-only";
-import { CAMPUS, estimateWalk, legPair, type WalkLeg } from "@/lib/domain";
+import { CAMPUS, estimateWalk, legPair, lunchPairNeeded, placeLegKey, type Category, type PlaceLeg, type WalkLeg } from "@/lib/domain";
 import { db } from "./supabase";
 import { tmapProvider, type LatLng, type RouteProvider, type WalkingPath } from "./tmap";
 
 /**
- * 보행 경로 저장소: 캠퍼스 → 가게, 캠퍼스·산책 장소 사이 구간의 보행 경로를
+ * 보행 경로 저장소: 캠퍼스 → 가게, 캠퍼스·산책 장소 사이 구간, 가게 → 산책 장소 구간의 보행 경로를
  * 계산(TMAP, 실패하면 추정값)하고 저장하고 매일 갱신하고, 읽을 때 24시간 신선도를 검사한다.
  *
- * 규칙 (docs/adr/0001, 0005)
+ * 규칙 (docs/adr/0001, 0005, 0006)
  * - TMAP 데이터는 저장 후 24시간이 지나면 쓸 수 없다. 읽는 쪽에는 낡은 값이 나가지 않는다:
  *   낡은 시간·거리는 직선거리 추정값(source: "estimate")으로, 낡은 경로 좌표는 null로 대신한다.
  * - 구간의 짝(어느 쪽이 앞인가)과 방향 뒤집기는 이 모듈 안에서만 다룬다.
@@ -151,4 +151,72 @@ export async function readCoursePaths(stops: string[]): Promise<(WalkingPath | n
     const path = row && isFresh(row.updated_at) ? (row.path as WalkingPath | null) : null;
     return path && !forward ? [...path].reverse() : path;
   });
+}
+
+// ── 가게 구간 (가게 → 산책 장소) ──────────────────────
+// 화면에 나올 수 있는 쌍(가게 구간에 최소치를 넣어도 점심 코스에 들어오는 쌍)만 TMAP으로 계산한다. docs/design/lunch-walk.md 3-3
+
+/**
+ * 점심 코스에 들어올 수 있는 가게 ↔ 산책 장소 쌍을 모두 TMAP으로 다시 계산해 저장하고, 들어올 수 없게 된 쌍은 지운다 (매일 한 번).
+ * 기준이 가게·장소의 캠퍼스 값에 기대므로 가게 크론과 구간 크론이 끝난 뒤에 돌아야 한다.
+ * TMAP이 실패한 쌍은 저장하지 않는다(어림값은 화면에서 계산한다). 보고의 estimate가 그 수다.
+ */
+export async function refreshPlaceLegs(provider: RouteProvider = tmapProvider): Promise<RefreshReport> {
+  const [places, spots, campusLegs, takeoutKeywords, existing] = await Promise.all([
+    db().from("places").select("id, lat, lng, category, preorder, walking_seconds"),
+    db().from("walk_spots").select("id, lat, lng, stay_minutes, picnic"),
+    db().from("walk_legs").select("spot_b, seconds").is("spot_a", null),
+    db().from("place_keywords").select("place_id").eq("keyword", "takeout"),
+    db().from("walk_place_legs").select("place_id, spot_id"),
+  ]);
+  for (const r of [places, spots, campusLegs, takeoutKeywords, existing]) if (r.error) throw r.error;
+  const csBySpot = new Map((campusLegs.data ?? []).map((l) => [l.spot_b, l.seconds]));
+  const withTakeoutKeyword = new Set((takeoutKeywords.data ?? []).map((k) => k.place_id));
+
+  const pairs: { place: { id: string; lat: number; lng: number }; spot: { id: string; lat: number; lng: number } }[] = [];
+  for (const p of places.data ?? []) {
+    if (p.walking_seconds == null) continue;
+    const place = { category: p.category as Category, preorder: !!p.preorder, keywords: withTakeoutKeyword.has(p.id) ? { takeout: 1 } : {} };
+    for (const s of spots.data ?? []) {
+      const cs = csBySpot.get(s.id);
+      if (cs != null && lunchPairNeeded(place, { picnic: !!s.picnic, stay_minutes: s.stay_minutes }, p.walking_seconds, cs)) pairs.push({ place: p, spot: s });
+    }
+  }
+
+  const report: RefreshReport = { updated: 0, tmap: 0, estimate: 0 };
+  for (const { place, spot } of pairs) {
+    const w = await compute(place, spot, provider);
+    tally(report, w);
+    if (w.source !== "tmap") continue;
+    const { error: uErr } = await db()
+      .from("walk_place_legs")
+      .upsert(
+        { place_id: place.id, spot_id: spot.id, seconds: w.seconds, meters: w.meters, path: w.path, updated_at: new Date().toISOString() },
+        { onConflict: "place_id,spot_id" },
+      );
+    if (uErr) throw uErr;
+  }
+
+  const needed = new Set(pairs.map((x) => placeLegKey(x.place.id, x.spot.id)));
+  for (const row of existing.data ?? []) {
+    if (needed.has(placeLegKey(row.place_id, row.spot_id))) continue;
+    const { error: dErr } = await db().from("walk_place_legs").delete().eq("place_id", row.place_id).eq("spot_id", row.spot_id);
+    if (dErr) throw dErr;
+  }
+  return report;
+}
+
+/** 24시간 안의 가게 구간(경로 좌표 제외). 낡은 값은 내보내지 않는다 (화면이 최대치로 판정한다). 테이블이 아직 없으면 빈 목록 */
+export async function readPlaceLegs(): Promise<PlaceLeg[]> {
+  const { data, error } = await db().from("walk_place_legs").select("place_id, spot_id, seconds, meters, updated_at");
+  // 마이그레이션 전에는 테이블이 없다. 점심 코스만 비고 나머지 산책 화면은 그대로 둔다
+  if (error) return [];
+  return (data ?? []).filter((l) => isFresh(l.updated_at)).map((l): PlaceLeg => ({ place_id: l.place_id, spot_id: l.spot_id, seconds: l.seconds, meters: l.meters, source: "tmap" }));
+}
+
+/** 가게 → 산책 장소 경로 좌표. 없거나 낡았으면 null (테이블이 아직 없어도 null) */
+export async function readPlaceLegPath(placeId: string, spotId: string): Promise<WalkingPath | null> {
+  const { data, error } = await db().from("walk_place_legs").select("path, updated_at").eq("place_id", placeId).eq("spot_id", spotId).maybeSingle();
+  if (error) return null;
+  return data && isFresh(data.updated_at) ? (data.path as WalkingPath | null) : null;
 }
