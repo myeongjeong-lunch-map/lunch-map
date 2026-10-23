@@ -118,6 +118,17 @@ Vercel Hobby 플랜은 프로젝트 주인이 아닌 사람의 커밋을 Git 연
 - `supabase-dev`는 개발 DB 프로젝트가 있는 Supabase 조직의 멤버여야 보인다.
 - `vercel`은 Vercel 프로젝트에 접근 권한이 있는 계정이어야 배포 정보가 보인다 (Hobby 플랜은 팀원을 초대할 수 없어 지금은 프로젝트 주인만).
 
+## 버전
+
+[SemVer](https://semver.org/lang/ko/) `v주.부.수`를 쓴다. **운영 반영(`dev` → `master` 머지) 한 번이 버전 하나**다.
+
+- `master`에 머지되면 [release.yml](.github/workflows/release.yml)이 지난 태그 이후 들어온 PR 브랜치 이름을 보고 다음 버전을 정해 태그와 [GitHub Release](https://github.com/myeongjeong-lunch-map/lunch-map/releases)를 만든다
+  - `feat/…` PR이 하나라도 있으면 **부** (v1.1.0 → v1.2.0)
+  - `fix/…` 등 그 밖의 PR만 있으면 **수** (v1.1.0 → v1.1.1)
+  - **주**는 `dev` → `master` 릴리스 PR에 `release:major` 라벨을 붙였을 때만 (v1.1.0 → v2.0.0)
+- 변경 기록은 GitHub Releases가 전부다. 릴리스 노트는 PR 제목으로 채워지니 PR 제목을 알아보기 쉽게 쓴다
+- `package.json`의 `version`은 쓰지 않는다. 버전의 기준은 태그다
+
 ## 브랜치
 
 - `master` — 운영 서비스 코드. 머지하면 https://myeongjeong-lunch-map.vercel.app 에 배포된다
