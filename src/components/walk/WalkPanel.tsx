@@ -1,37 +1,24 @@
 "use client";
 
-import { LUNCH_TIGHT_MINUTES, MAX_COURSE_STOPS, WALK_KIND_EMOJI, campusWalk, courseTime, formatMeters, type WalkCourse, type WalkLeg, type WalkSpot } from "@/lib/domain";
+import { LUNCH_TIGHT_MINUTES, MAX_COURSE_STOPS, WALK_KIND_EMOJI, formatMeters, type CourseTime } from "@/lib/domain";
 import { Chip } from "@/components/place/PlaceList";
+import type { WalkMap } from "@/components/walk/useWalkMap";
 
 type Props = {
-  courses: WalkCourse[];
-  spots: Map<string, WalkSpot>;
-  spotList: WalkSpot[];
-  legs: Map<string, WalkLeg>;
-  /** 내 코스에 담은 장소 id */
-  draft: Set<string>;
-  /** 내 코스가 가득 찼으면 더 담을 수 없다 */
-  draftFull: boolean;
-  maxMinutes: 30 | 45 | null;
-  onMaxMinutes: (m: 30 | 45 | null) => void;
+  walk: WalkMap;
   onOpenCourse: (courseId: string) => void;
   onOpenSpot: (spotId: string) => void;
-  onToggleSpot: (spotId: string) => void;
 };
 
 /** "걷기 20분 + 둘러보기 10분 · 1.3km" */
-export function courseBreakdown(ct: ReturnType<typeof courseTime>): string {
+export function courseBreakdown(ct: CourseTime): string {
   return `걷기 ${Math.round(ct.walkSeconds / 60)}분 + 둘러보기 ${ct.stayMinutes}분 · ${formatMeters(ct.meters)}`;
 }
 
-export function WalkPanel({ courses, spots, spotList, legs, draft, draftFull, maxMinutes, onMaxMinutes, onOpenCourse, onOpenSpot, onToggleSpot }: Props) {
-  const cards = courses
-    .map((c) => {
-      const stops = c.stops.filter((s) => spots.has(s.spot_id));
-      return { course: c, stops, time: courseTime(stops, spots, legs) };
-    })
-    .filter((c) => c.stops.length > 0);
-  const shown = cards.filter((c) => maxMinutes == null || c.time.totalMinutes <= maxMinutes);
+export function WalkPanel({ walk, onOpenCourse, onOpenSpot }: Props) {
+  const { draft, maxMinutes, setMaxMinutes: onMaxMinutes } = walk;
+  const shown = walk.visibleCourses;
+  const cardCount = walk.recommended.length;
 
   return (
     <div className="pb-6">
@@ -47,12 +34,14 @@ export function WalkPanel({ courses, spots, spotList, legs, draft, draftFull, ma
       <ul className="space-y-2 px-4">
         {shown.length === 0 && (
           <li className="rounded-2xl bg-surface p-6 text-center text-sm text-muted">
-            {cards.length === 0 ? "아직 등록된 산책 코스가 없어요" : `${maxMinutes}분 안에 다녀올 수 있는 코스가 없어요`}
+            {cardCount === 0 ? "아직 등록된 산책 코스가 없어요" : `${maxMinutes}분 안에 다녀올 수 있는 코스가 없어요`}
           </li>
         )}
-        {shown.map(({ course, stops, time }) => (
+        {shown.map((course) => {
+          const { stops, time } = course;
+          return (
           <li key={course.id}>
-            <button onClick={() => onOpenCourse(course.id)} className="w-full rounded-2xl border border-line p-4 text-left hover:bg-surface">
+            <button onClick={() => onOpenCourse(course.id!)} className="w-full rounded-2xl border border-line p-4 text-left hover:bg-surface">
               <span className="flex items-baseline justify-between gap-2">
                 <span className="font-bold">{course.name}</span>
                 <span className="shrink-0 text-right">
@@ -61,23 +50,24 @@ export function WalkPanel({ courses, spots, spotList, legs, draft, draftFull, ma
                 </span>
               </span>
               <span className="mt-1 block text-[13px] text-foreground/80">
-                🏫 → {stops.map((s) => `${WALK_KIND_EMOJI[spots.get(s.spot_id)!.kind]} ${spots.get(s.spot_id)!.name}`).join(" → ")} → 🏫
+                🏫 → {stops.map(({ spot }) => `${WALK_KIND_EMOJI[spot.kind]} ${spot.name}`).join(" → ")} → 🏫
               </span>
               <span className="mt-0.5 block text-xs text-muted">{courseBreakdown(time)}</span>
               {course.summary && <span className="mt-1 block text-[13px] text-muted">{course.summary}</span>}
               {time.rough && <span className="mt-1 block text-[11px] text-muted/80">일부 구간은 어림값이에요</span>}
             </button>
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       <h2 className="px-5 pb-1 pt-5 text-sm font-black">직접 짜기</h2>
-      <p className="px-5 pb-2 text-xs text-muted">지도나 아래 목록에서 장소를 골라 내 코스를 만들어요 (최대 {MAX_COURSE_STOPS}곳{draftFull ? " · 다 찼어요" : ""})</p>
+      <p className="px-5 pb-2 text-xs text-muted">지도나 아래 목록에서 장소를 골라 내 코스를 만들어요 (최대 {MAX_COURSE_STOPS}곳{draft.full ? " · 다 찼어요" : ""})</p>
       <ul>
-        {spotList.length === 0 && <li className="p-8 text-center text-sm text-muted">아직 등록된 산책 장소가 없어요</li>}
-        {spotList.map((sp) => {
+        {walk.spots.length === 0 && <li className="p-8 text-center text-sm text-muted">아직 등록된 산책 장소가 없어요</li>}
+        {walk.spots.map((sp) => {
           const picked = draft.has(sp.id);
-          const walk = campusWalk(sp, legs);
+          const campus = walk.campusWalk(sp);
           return (
             <li key={sp.id} className="flex items-stretch border-t border-line/60">
               <button onClick={() => onOpenSpot(sp.id)} className="flex min-w-0 flex-1 items-start gap-3 py-3.5 pl-4 pr-2 text-left hover:bg-surface">
@@ -86,16 +76,16 @@ export function WalkPanel({ courses, spots, spotList, legs, draft, draftFull, ma
                   <span className="block truncate font-bold">{sp.name}</span>
                   {sp.summary && <span className="mt-0.5 block text-[13px] text-muted">{sp.summary}</span>}
                   <span className="mt-0.5 block text-xs font-bold text-foreground/80">
-                    캠퍼스에서 걸어서 {walk.rough ? "약 " : ""}
-                    {walk.minutes}분
+                    캠퍼스에서 걸어서 {campus.rough ? "약 " : ""}
+                    {campus.minutes}분
                   </span>
                 </span>
               </button>
               <button
-                onClick={() => onToggleSpot(sp.id)}
+                onClick={() => draft.toggle(sp.id)}
                 aria-label={picked ? `${sp.name} 내 코스에서 빼기` : `${sp.name} 내 코스에 담기`}
                 aria-pressed={picked}
-                disabled={!picked && draftFull}
+                disabled={!picked && draft.full}
                 className="grid w-12 shrink-0 place-items-center hover:bg-surface disabled:opacity-30"
               >
                 <span className={`grid h-7 w-7 place-items-center rounded-full text-sm font-black ${picked ? "bg-brand text-brand-ink" : "border border-line text-muted"}`}>
