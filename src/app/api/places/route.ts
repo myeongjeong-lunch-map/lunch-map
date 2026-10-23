@@ -9,14 +9,17 @@ import { HALLOWEEN_START } from "@/lib/halloween";
 export async function GET(req: NextRequest) {
   try {
     const since = new Date(Date.now() - WEEK_MS).toISOString();
-    const [summaries, keywords, weekLikes, weekTips, eventTips] = await Promise.all([
+    const [summaries, keywords, weekLikes, weekTips, eventTips, preorders] = await Promise.all([
       db().from("place_summaries").select("*"),
       db().from("place_keywords").select("place_id, keyword, voter_id"),
       db().from("votes").select("place_id").eq("value", 1).gte("updated_at", since),
       db().from("tips").select("place_id").gte("created_at", since),
       db().from("tips").select("place_id").gte("created_at", new Date(HALLOWEEN_START).toISOString()),
+      // place_summaries 뷰는 새 칸을 모르므로 따로 읽는다. 칸이 없는 옛 DB에서는 모두 미리 주문이 아니다
+      db().from("places").select("id").eq("preorder", true),
     ]);
     for (const r of [summaries, keywords, weekLikes, weekTips, eventTips]) if (r.error) throw r.error;
+    const preorderIds = new Set((preorders.data ?? []).map((p) => p.id));
 
     const voterId = readVoterId(req);
     const keywordCounts = new Map<string, Partial<Record<KeywordKey, number>>>();
@@ -37,6 +40,7 @@ export async function GET(req: NextRequest) {
 
     const places: Place[] = (summaries.data ?? []).map((p) => ({
       ...withFreshWalking(p),
+      preorder: preorderIds.has(p.id),
       keywords: keywordCounts.get(p.id) ?? {},
       weekly_score: weeklyScore(recentLikes.get(p.id) ?? 0, recentTips.get(p.id) ?? 0),
       event_tips: eventCount.get(p.id) ?? 0,

@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
 import { drawBoxRules } from "@/lib/drawBox";
-import { DRAW_ANIMATIONS, DRAW_LIMITS, drawCandidates, drawWeights, MIN_DRAW_PLACES, type DrawAnimation, type DrawBox, type DrawLimit, type DrawResult, type Place, type TeamDetail, type TeamSummary } from "@/lib/domain";
+import { DRAW_ANIMATIONS, DRAW_LIMITS, drawCandidates, drawWeights, MIN_DRAW_PLACES, type DrawAnimation, type DrawBox, type DrawLimit, type DrawResult, type LunchCourse, type Place, type TeamDetail, type TeamSummary } from "@/lib/domain";
 import { CategoryDot } from "@/components/place/PlaceList";
+import { LunchCourseList } from "@/components/walk/LunchCourseList";
+import { useLunchCourses } from "@/components/walk/useLunchCourses";
+import type { WalkMap } from "@/components/walk/useWalkMap";
 import { DrawShow, type ShowEntry } from "@/components/draw/DrawShow";
 import { useHalloween } from "@/components/ui/useHalloween";
 
@@ -23,6 +26,9 @@ type Props = {
   onTeamId: (id: string | null) => void;
   onTeamsChanged: () => Promise<void>;
   onShowPlace: (id: string) => void;
+  /** 뽑힌 가게의 점심 코스를 그리는 데 쓴다 */
+  walk: WalkMap;
+  onOpenLunch: (course: LunchCourse) => void;
 };
 
 type Show = { result: DrawResult; entries: ShowEntry[] };
@@ -39,7 +45,7 @@ function showOf(box: DrawBox, result: DrawResult | undefined, byId: Map<string, 
 
 const roundLabel = (n: number) => `${n}차`;
 
-export function DrawTab({ places, teams, teamsError, teamId, onTeamId, onTeamsChanged, onShowPlace }: Props) {
+export function DrawTab({ places, teams, teamsError, teamId, onTeamId, onTeamsChanged, onShowPlace, walk, onOpenLunch }: Props) {
   if (teams == null)
     return teamsError ? (
       <p className="p-5 text-sm text-danger">
@@ -62,7 +68,21 @@ export function DrawTab({ places, teams, teamsError, teamId, onTeamId, onTeamsCh
       onTeamId={onTeamId}
       onTeamsChanged={onTeamsChanged}
       onShowPlace={onShowPlace}
+      walk={walk}
+      onOpenLunch={onOpenLunch}
     />
+  );
+}
+
+/** 뽑힌 가게의 점심 코스 (최대 3개). 없으면 아무것도 그리지 않는다 */
+function LunchOf({ walk, places, placeId, onOpen }: { walk: WalkMap; places: Place[]; placeId: string; onOpen: (c: LunchCourse) => void }) {
+  const { courses } = useLunchCourses(walk, places, "all", placeId);
+  if (courses.length === 0) return null;
+  return (
+    <div className="mt-2.5">
+      <p className="pb-1.5 text-xs font-bold text-muted">🍱 이 집에서 먹고 산책하려면</p>
+      <LunchCourseList courses={courses} limit={3} compact onOpen={onOpen} />
+    </div>
   );
 }
 
@@ -195,7 +215,7 @@ function TeamList({ teams, onTeamId, onTeamsChanged }: { teams: TeamSummary[]; o
 
 type ViewProps = Omit<Props, "teams" | "teamsError" | "teamId"> & { teams: TeamSummary[]; summary: TeamSummary };
 
-function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlace }: ViewProps) {
+function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlace, walk, onOpenLunch }: ViewProps) {
   const [team, setTeam] = useState<TeamDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -433,6 +453,7 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
                   );
                 })}
               </ol>
+              {lastPlace && <LunchOf walk={walk} places={places} placeId={lastPlace.id} onOpen={onOpenLunch} />}
               {!team.is_leader && <p className="mt-2 text-xs text-muted">조장이 결정하거나 다시 뽑기를 기다리고 있어요.</p>}
             </div>
           ) : (
@@ -551,6 +572,7 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
               );
             })}
           </ul>
+          {latest.result_place_id && <LunchOf walk={walk} places={places} placeId={latest.result_place_id} onOpen={onOpenLunch} />}
         </section>
       )}
 

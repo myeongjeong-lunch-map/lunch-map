@@ -229,7 +229,7 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
     const naver = window.naver;
     if (!ready || !naver?.maps || !map.current) return;
     const order = new Map<string, number>();
-    route?.stops.forEach((st, i) => order.set(`${st.lat},${st.lng}`, i + 1));
+    if (route?.numbered !== false) route?.stops.forEach((st, i) => order.set(`${st.lat},${st.lng}`, i + 1));
     const seen = new Set<string>();
     for (const sp of spots) {
       seen.add(sp.id);

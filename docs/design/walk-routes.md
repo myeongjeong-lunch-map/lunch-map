@@ -339,6 +339,8 @@ export function courseTime(stops: WalkCourseStop[], spots: Map<string, WalkSpot>
 
 ### 4-6. 점심시간 필터는 유용한가
 
+> 이 문서로 대체됨, [lunch-walk.md](lunch-walk.md) 참고. 30분·45분 칩은 없어지고 "점심시간에 다녀오기" / "여유 있는 날" 묶음으로 나뉜다.
+
 유용하다고 본다. 이 기능을 여는 사람의 첫 질문이 "지금 다녀올 수 있나?"이고, 추천 코스가 30분부터 80분까지 차이가 크다. 다만 점심시간 1시간에는 밥 먹는 시간이 들어가므로 "60분 이내"는 의미가 없다. 그래서 30분·45분 두 칩만 둔다. 기준값은 [질문 2](#사용자에게-확인할-질문).
 
 ### 4-7. 상태 (`src/components/LunchMap.tsx`)

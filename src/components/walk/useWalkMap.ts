@@ -1,13 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, loadWalkDraft, saveWalkDraft, type WalkResponse } from "@/lib/api";
+import { api, loadLunchMode, loadWalkDraft, saveLunchMode, saveWalkDraft, type WalkResponse } from "@/lib/api";
 import {
+  DINE_IN_MINUTES,
+  LUNCH_MINUTES,
   MAX_COURSE_STOPS,
   campusWalk as campusWalkOf,
   courseTime,
   legKey,
+  lunchCourses,
+  placeLegKey,
   type CourseTime,
+  type LunchCourse,
+  type LunchMode,
+  type Place,
+  type PlaceLeg,
   type WalkCourseStop,
   type WalkLeg,
   type WalkSpot,
@@ -28,7 +36,10 @@ export type CourseView = {
 
 export type CampusWalk = ReturnType<typeof campusWalkOf>;
 
-const EMPTY: WalkResponse = { spots: [], courses: [], legs: [] };
+const EMPTY: WalkResponse = { spots: [], courses: [], legs: [], placeLegs: [] };
+
+/** 추천 코스가 "점심시간에 다녀오기"에 들어가는 코스 시간: 점심시간에서 식사를 뺀 식후 시간 */
+const AFTER_MEAL_MINUTES = LUNCH_MINUTES - DINE_IN_MINUTES;
 
 /** 산책 응답 하나와 내 코스 id 목록에서 화면이 쓸 값을 모두 계산한다 (순수 함수) */
 export function buildWalkMap(walk: WalkResponse, draftSaved: string[]) {
@@ -39,10 +50,16 @@ export function buildWalkMap(walk: WalkResponse, draftSaved: string[]) {
     const stops = raw.filter((st) => spotMap.has(st.spot_id)).map((stop) => ({ stop, spot: spotMap.get(stop.spot_id)! }));
     return { id, name, summary, stops, stopIds: stops.map((s) => s.spot.id), time: courseTime(stops.map((s) => s.stop), spotMap, legMap) };
   };
+  const placeLegMap = new Map<string, PlaceLeg>(walk.placeLegs.map((l) => [placeLegKey(l.place_id, l.spot_id), l]));
   const draftIds = draftSaved.filter((id) => spotMap.has(id));
   const draftCourse = view(null, null, null, draftIds.map((id) => ({ spot_id: id, stay_minutes: null })));
   const recommended = walk.courses.map((c) => view(c.id, c.name, c.summary, c.stops)).filter((c) => c.stops.length > 0);
   return {
+    /** 점심 코스: 가게 목록은 화면이 가진 것을 받는다. startAt이 없으면 12:50 기준 */
+    lunch: (mode: LunchMode, places: Place[], startAt?: Date): LunchCourse[] => lunchCourses(mode, places, walk.spots, legMap, placeLegMap, startAt),
+    /** 추천 코스 가운데 식후 30분 안에 다녀올 수 있는 것 / 여유 있는 날 가는 것 */
+    inLunchHour: recommended.filter((c) => c.time.totalMinutes <= AFTER_MEAL_MINUTES),
+    relaxed: recommended.filter((c) => c.time.totalMinutes > AFTER_MEAL_MINUTES),
     spots: walk.spots,
     spotMap,
     recommended,
@@ -68,7 +85,7 @@ export function useWalkMap() {
   const [walk, setWalk] = useState<WalkResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string[]>([]);
-  const [maxMinutes, setMaxMinutes] = useState<30 | 45 | null>(null);
+  const [lunchMode, setLunchModeState] = useState<LunchMode>("dine");
 
   useEffect(() => {
     // 마운트 시 산책 장소·코스를 불러오고, 이 브라우저에 기억해 둔 내 코스를 연다 (localStorage는 서버 렌더 때 읽을 수 없다)
@@ -78,6 +95,12 @@ export function useWalkMap() {
       .catch((e: Error) => setError(e.message));
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSaved(loadWalkDraft());
+    setLunchModeState(loadLunchMode());
+  }, []);
+
+  const setLunchMode = useCallback((mode: LunchMode) => {
+    setLunchModeState(mode);
+    saveLunchMode(mode);
   }, []);
 
   const built = useMemo(() => buildWalkMap(walk ?? EMPTY, saved), [walk, saved]);
@@ -120,11 +143,9 @@ export function useWalkMap() {
     error,
     ...built,
     draft,
-    /** 코스 시간 칩: 30·45분 이내만 보기 */
-    maxMinutes,
-    setMaxMinutes,
-    /** 추천 코스 가운데 칩 조건에 맞는 것 */
-    visibleCourses: useMemo(() => built.recommended.filter((c) => maxMinutes == null || c.time.totalMinutes <= maxMinutes), [built.recommended, maxMinutes]),
+    /** 점심 코스 칩: 마지막으로 고른 방식 (이 브라우저에 기억한다) */
+    lunchMode,
+    setLunchMode,
   };
 }
 

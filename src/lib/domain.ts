@@ -33,6 +33,8 @@ export type Place = {
   walking_seconds: number | null;
   walking_meters: number | null;
   walking_source: "tmap" | "estimate" | null;
+  /** 앱으로 미리 주문해 두고 받기만 하는 가게 (관리자가 표시). 포장해서 먹기에서 기다리는 시간이 짧다 */
+  preorder: boolean;
   likes: number;
   dislikes: number;
   tip_count: number;
@@ -69,8 +71,6 @@ export const WALK_SPOT_KINDS = [
 export type WalkSpotKind = (typeof WALK_SPOT_KINDS)[number]["key"];
 export const WALK_KIND_EMOJI = Object.fromEntries(WALK_SPOT_KINDS.map((k) => [k.key, k.emoji])) as Record<WalkSpotKind, string>;
 export const WALK_KIND_LABEL = Object.fromEntries(WALK_SPOT_KINDS.map((k) => [k.key, k.label])) as Record<WalkSpotKind, string>;
-/** 코스 시간이 이보다 길면 카드에 "점심시간엔 빠듯"을 붙인다 */
-export const LUNCH_TIGHT_MINUTES = 45;
 
 export type WalkSpot = {
   id: string;
@@ -81,6 +81,8 @@ export type WalkSpot = {
   lng: number;
   stay_minutes: number;
   naver_place_id: string | null;
+  /** 포장해서 먹을 수 있는 곳 (벤치·광장이 있고 음식을 먹어도 된다) */
+  picnic: boolean;
 };
 export type WalkCourseStop = { spot_id: string; stay_minutes: number | null };
 export type WalkCourse = { id: string; name: string; summary: string | null; stops: WalkCourseStop[] };
@@ -179,6 +181,197 @@ export function campusWalk(spot: WalkSpot, legs: Map<string, WalkLeg>): { minute
 /** 지도 위 칩과 카드에 쓰는 거리 문구: 640m, 1.3km */
 export function formatMeters(meters: number): string {
   return meters < 1000 ? `${Math.round(meters / 10) * 10}m` : `${(meters / 1000).toFixed(1)}km`;
+}
+
+// 점심 코스 (GLOSSARY.md: 점심시간, 점심 코스, 가게 구간, 복귀 시각, 미리 주문, docs/design/lunch-walk.md)
+export const LUNCH_START = { h: 12, m: 50 };
+export const LUNCH_MINUTES = 70; // 12:50 ~ 14:00
+export const DINE_IN_MINUTES = 40; // 먹고 걷기: 자리에서 일어나 가게를 나설 때까지 (가게까지 걷기 포함)
+export const TAKEOUT_WAIT_MINUTES = 10; // 포장 대기
+export const PREORDER_WAIT_MINUTES = 2; // 미리 주문한 가게에서 받기
+export const PICNIC_EAT_MINUTES = 20; // 산책 장소에서 먹기
+/** 들고 가서 먹기 좋은 카테고리. 다른 카테고리 가게는 미리 주문이나 "포장 OK" 키워드로 들어온다 */
+export const TAKEOUT_CATEGORIES: readonly Category[] = ["패스트푸드", "분식"];
+
+const LUNCH_START_MINUTES = LUNCH_START.h * 60 + LUNCH_START.m;
+const LUNCH_END_MINUTES = LUNCH_START_MINUTES + LUNCH_MINUTES;
+
+export type LunchMode = "dine" | "takeout";
+export const LUNCH_MODES = [
+  { key: "dine", label: "🚶 먹고 걷기" },
+  { key: "takeout", label: "🥡 포장해서 먹기" },
+] as const satisfies readonly { key: LunchMode; label: string }[];
+/** 가게 ↔ 산책 장소 구간 (TMAP 값만 저장한다) */
+export type PlaceLeg = { place_id: string; spot_id: string; seconds: number; meters: number; source: "tmap" };
+export const placeLegKey = (placeId: string, spotId: string) => `${placeId}|${spotId}`;
+
+/** 포장해서 먹기에 쓸 수 있는 가게: 패스트푸드·분식, 미리 주문, "포장 OK" 키워드를 1명 이상 골랐음 */
+export function isTakeoutPlace(p: Pick<Place, "category" | "preorder" | "keywords">): boolean {
+  return TAKEOUT_CATEGORIES.includes(p.category) || p.preorder || (p.keywords.takeout ?? 0) >= 1;
+}
+
+/**
+ * 가게 구간(초)의 범위. 캠퍼스를 거쳐 가는 길보다 길 수 없고, 두 값의 차이보다 짧을 수 없다.
+ * cp: 캠퍼스 → 가게, cs: 캠퍼스 → 산책 장소 (초)
+ */
+export function placeLegBounds(cp: number, cs: number): { min: number; max: number } {
+  return { min: Math.abs(cs - cp), max: cp + cs };
+}
+
+/** 점심 코스 한 번에 걸리는 시간(초). 가게·산책 장소·가게 구간이 정해진 뒤의 합 */
+export type LunchInput = {
+  /** 캠퍼스 → 가게 */
+  cp: number;
+  /** 캠퍼스 → 산책 장소 (돌아오는 길도 같은 값) */
+  cs: number;
+  /** 가게 → 산책 장소 */
+  ps: number;
+  /** 산책 장소 기본 둘러보기 (분). 먹고 걷기에서만 쓴다 */
+  stay: number;
+  preorder: boolean;
+};
+
+export const takeoutWaitMinutes = (preorder: boolean) => (preorder ? PREORDER_WAIT_MINUTES : TAKEOUT_WAIT_MINUTES);
+
+export function lunchSeconds(mode: LunchMode, v: LunchInput): number {
+  // 먹고 걷기는 가게까지 걷기가 식사 40분 안에 들어 있어 cp를 더하지 않는다. 포장은 먹는 20분이 둘러보기를 대신한다
+  return mode === "dine"
+    ? DINE_IN_MINUTES * 60 + v.ps + v.stay * 60 + v.cs
+    : v.cp + takeoutWaitMinutes(v.preorder) * 60 + v.ps + PICNIC_EAT_MINUTES * 60 + v.cs;
+}
+
+/** 분은 초를 모두 더한 뒤 한 번만 반올림한다. budget은 출발부터 14:00까지 남은 분 */
+export function lunchFits(mode: LunchMode, v: LunchInput, budget: number = LUNCH_MINUTES): boolean {
+  return Math.round(lunchSeconds(mode, v) / 60) <= budget;
+}
+
+/** 이 가게·산책 장소 쌍이 이 방식으로 점심 코스가 될 수 있는지 (판정 전에 거르는 조건) */
+export function lunchEligible(mode: LunchMode, place: Pick<Place, "category" | "preorder" | "keywords">, spot: Pick<WalkSpot, "picnic">): boolean {
+  return mode === "dine" || (spot.picnic && isTakeoutPlace(place));
+}
+
+/** 서버가 TMAP으로 계산할 쌍을 고르는 기준: 가게 구간에 최소치를 넣어 두 방식 중 하나라도 들어오면 */
+export function lunchPairNeeded(place: Pick<Place, "category" | "preorder" | "keywords">, spot: Pick<WalkSpot, "picnic" | "stay_minutes">, cp: number, cs: number): boolean {
+  const ps = placeLegBounds(cp, cs).min;
+  return LUNCH_MODES.some(({ key }) => lunchEligible(key, place, spot) && lunchFits(key, { cp, cs, ps, stay: spot.stay_minutes, preorder: place.preorder }));
+}
+
+/** 서울 시각의 자정 이후 분 (서버가 아니라 브라우저의 시계로 계산한다) */
+export function seoulMinutes(d: Date): number {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  return get("hour") * 60 + get("minute");
+}
+
+/** 12:50 전이거나 14:00 뒤면 12:50 출발, 점심시간 중이면 지금. fromNow는 "지금 나가면" 기준인지 */
+export function lunchStart(now?: Date): { minutes: number; fromNow: boolean } {
+  const m = now ? seoulMinutes(now) : -1;
+  return m >= LUNCH_START_MINUTES && m < LUNCH_END_MINUTES ? { minutes: m, fromNow: true } : { minutes: LUNCH_START_MINUTES, fromNow: false };
+}
+
+/** 자정 이후 분 → "13:38" */
+export function clock(minutes: number): string {
+  const m = ((Math.round(minutes) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+export type LunchCourse = {
+  mode: LunchMode;
+  place: Place;
+  spot: WalkSpot;
+  /** 캠퍼스 → 가게, 가게 → 장소, 장소 → 캠퍼스. 가게 구간이 어림값이면 rough */
+  legs: { seconds: number; meters: number; rough: boolean }[];
+  /** 출발부터 캠퍼스 도착까지 분 */
+  totalMinutes: number;
+  /** 출발 시각 (자정 이후 분) */
+  startMinutes: number;
+  /** "13:52" */
+  returnAt: string;
+  /** 포장해서 먹기에서 가게에서 기다리는 분 (먹고 걷기는 0) */
+  waitMinutes: number;
+  /** 산책 장소에서 보내는 분: 먹고 걷기는 둘러보기, 포장해서 먹기는 먹는 시간 */
+  stayMinutes: number;
+  rough: boolean;
+};
+
+/** 판정을 통과한 점심 코스만. 복귀 시각이 이른 순. placeLegs의 key는 placeLegKey */
+export function lunchCourses(
+  mode: LunchMode,
+  places: Place[],
+  spots: WalkSpot[],
+  legs: Map<string, WalkLeg>,
+  placeLegs: Map<string, PlaceLeg>,
+  startAt?: Date,
+): LunchCourse[] {
+  // 먹고 걷기는 먹는 중일 수 있어 출발 시각을 알 수 없으므로 늘 12:50 기준이다. 포장해서 먹기만 지금 기준으로 다시 계산한다
+  const start = mode === "takeout" ? lunchStart(startAt).minutes : LUNCH_START_MINUTES;
+  const budget = LUNCH_END_MINUTES - start;
+  const out: { seconds: number; course: LunchCourse }[] = [];
+  for (const place of places) {
+    if (place.walking_seconds == null) continue;
+    const cp = place.walking_seconds;
+    for (const spot of spots) {
+      const campusLeg = legs.get(legKey(null, spot.id));
+      if (!campusLeg || !lunchEligible(mode, place, spot)) continue;
+      const cs = campusLeg.seconds;
+      const stored = placeLegs.get(placeLegKey(place.id, spot.id));
+      const { min, max } = placeLegBounds(cp, cs);
+      // 저장된 TMAP 값이 없으면 최대치로 들어오는 쌍만 보여 주고, 시간은 어림값을 범위 안으로 잘라 쓴다
+      const guess = estimateWalk(place, spot);
+      const ps = stored ? stored.seconds : Math.min(max, Math.max(min, guess.seconds));
+      const base = { cp, cs, stay: spot.stay_minutes, preorder: place.preorder };
+      if (!lunchFits(mode, { ...base, ps: stored ? ps : max }, budget)) continue;
+      const seconds = lunchSeconds(mode, { ...base, ps });
+      const course: LunchCourse = {
+        mode,
+        place,
+        spot,
+        legs: [
+          { seconds: cp, meters: place.walking_meters ?? 0, rough: place.walking_source !== "tmap" },
+          { seconds: ps, meters: stored ? stored.meters : guess.meters, rough: !stored },
+          { seconds: cs, meters: campusLeg.meters, rough: campusLeg.source !== "tmap" },
+        ],
+        totalMinutes: Math.round(seconds / 60),
+        startMinutes: start,
+        returnAt: clock(start + seconds / 60),
+        waitMinutes: mode === "takeout" ? takeoutWaitMinutes(place.preorder) : 0,
+        stayMinutes: mode === "takeout" ? PICNIC_EAT_MINUTES : spot.stay_minutes,
+        rough: false,
+      };
+      course.rough = course.legs.some((l) => l.rough);
+      out.push({ seconds, course });
+    }
+  }
+  return out.sort((a, b) => a.seconds - b.seconds).map((x) => x.course);
+}
+
+export type LunchTimelineRow = { at: string; text: string };
+
+/** 점심 코스 시간표. 각 시각은 출발부터 쌓은 초를 그때그때 반올림한다 (구간마다 반올림해 더하면 복귀 시각이 1분 어긋날 수 있다) */
+export function lunchTimeline(c: LunchCourse): LunchTimelineRow[] {
+  const [cp, ps, cs] = c.legs.map((l) => l.seconds);
+  const at = (secondsFromStart: number) => clock(c.startMinutes + secondsFromStart / 60);
+  if (c.mode === "dine") {
+    const eaten = DINE_IN_MINUTES * 60;
+    const arrive = eaten + ps;
+    return [
+      { at: clock(c.startMinutes), text: `캠퍼스 출발 → ${at(eaten)} 식사 끝` },
+      { at: at(arrive), text: `${c.spot.name} 도착 · 둘러보기 ${c.stayMinutes}분` },
+      { at: at(arrive + c.stayMinutes * 60), text: "출발" },
+      { at: at(arrive + c.stayMinutes * 60 + cs), text: "캠퍼스 도착" },
+    ];
+  }
+  const atPlace = cp;
+  const leavePlace = atPlace + c.waitMinutes * 60;
+  const atSpot = leavePlace + ps;
+  const leaveSpot = atSpot + c.stayMinutes * 60;
+  return [
+    { at: clock(c.startMinutes), text: "캠퍼스 출발" },
+    { at: at(atPlace), text: `${c.place.name} · ${c.place.preorder ? "미리 주문 받기" : "포장 기다리기"} ${c.waitMinutes}분` },
+    { at: at(atSpot), text: `${c.spot.name} 도착 · 먹기 ${c.stayMinutes}분` },
+    { at: at(leaveSpot), text: "출발" },
+    { at: at(leaveSpot + cs), text: "캠퍼스 도착" },
+  ];
 }
 
 // 랭킹. "이번 주"는 최근 7일 좋아요 × 2 + 꿀팁, "전체"는 좋아요 − 싫어요. 같으면 가까운 순.
