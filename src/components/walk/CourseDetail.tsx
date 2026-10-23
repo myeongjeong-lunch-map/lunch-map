@@ -1,16 +1,12 @@
 "use client";
 
 import { Fragment } from "react";
-import { WALK_KIND_EMOJI, formatMeters, naverMapUrl, type CourseTime, type WalkCourseStop, type WalkSpot } from "@/lib/domain";
+import { WALK_KIND_EMOJI, formatMeters, naverMapUrl } from "@/lib/domain";
+import type { CourseView } from "@/components/walk/useWalkMap";
 import { courseBreakdown } from "@/components/walk/WalkPanel";
 
 type Props = {
-  /** 추천 코스 이름. 내 코스면 null */
-  name: string | null;
-  summary: string | null;
-  stops: WalkCourseStop[];
-  spots: Map<string, WalkSpot>;
-  time: CourseTime;
+  course: CourseView;
   backLabel: string;
   onBack: () => void;
   onOpenSpot: (spotId: string) => void;
@@ -23,7 +19,8 @@ type Props = {
 
 const mins = (seconds: number) => Math.max(1, Math.round(seconds / 60));
 
-export function CourseDetail({ name, summary, stops, spots, time, backLabel, onBack, onOpenSpot, onMove, onRemove, onCopy }: Props) {
+export function CourseDetail({ course, backLabel, onBack, onOpenSpot, onMove, onRemove, onCopy }: Props) {
+  const { name, summary, stops, time } = course;
   const editable = !!onMove && !!onRemove;
   const leg = (i: number) => {
     const l = time.legs[i];
@@ -52,8 +49,7 @@ export function CourseDetail({ name, summary, stops, spots, time, backLabel, onB
           <ol className="mt-4 text-sm">
             <li className="font-bold">🏫 캠퍼스 출발</li>
             {leg(0)}
-            {stops.map((st, i) => {
-              const sp = spots.get(st.spot_id)!;
+            {stops.map(({ stop: st, spot: sp }, i) => {
               const stay = st.stay_minutes ?? sp.stay_minutes;
               return (
                 <Fragment key={st.spot_id}>
