@@ -1,11 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isCategory, isKeyword, MAX_KEYWORDS_PER_PLACE, type KeywordKey, type MyVote, type Place } from "@/lib/domain";
+import { isCategory, isKeyword, MAX_KEYWORDS_PER_PLACE, WEEK_MS, weeklyScore, type KeywordKey, type MyVote, type Place } from "@/lib/domain";
 import { db } from "@/lib/server/supabase";
 import { cleanText, ensureVoterId, errorResponse, guardWrite, HttpError, readVoterId } from "@/lib/server/guard";
 import { computeWalking } from "@/lib/server/walking";
 import { resolveNaverPlaceId } from "@/lib/naverPlaceId";
-
-const WEEK_MS = 7 * 24 * 3600 * 1000;
 
 export async function GET(req: NextRequest) {
   try {
@@ -27,11 +25,12 @@ export async function GET(req: NextRequest) {
       keywordCounts.set(k.place_id, counts);
       if (voterId && k.voter_id === voterId) (myKeywords[k.place_id] ??= []).push(k.keyword as KeywordKey);
     }
-    const weekly = new Map<string, number>();
-    for (const v of weekLikes.data ?? []) weekly.set(v.place_id, (weekly.get(v.place_id) ?? 0) + 2);
-    for (const t of weekTips.data ?? []) weekly.set(t.place_id, (weekly.get(t.place_id) ?? 0) + 1);
+    const recentLikes = new Map<string, number>();
+    for (const v of weekLikes.data ?? []) recentLikes.set(v.place_id, (recentLikes.get(v.place_id) ?? 0) + 1);
+    const recentTips = new Map<string, number>();
+    for (const t of weekTips.data ?? []) recentTips.set(t.place_id, (recentTips.get(t.place_id) ?? 0) + 1);
 
-    const places: Place[] = (summaries.data ?? []).map((p) => ({ ...p, keywords: keywordCounts.get(p.id) ?? {}, weekly_score: weekly.get(p.id) ?? 0 }));
+    const places: Place[] = (summaries.data ?? []).map((p) => ({ ...p, keywords: keywordCounts.get(p.id) ?? {}, weekly_score: weeklyScore(recentLikes.get(p.id) ?? 0, recentTips.get(p.id) ?? 0) }));
 
     const myVotes: Record<string, MyVote> = {};
     if (voterId) {

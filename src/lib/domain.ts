@@ -154,12 +154,58 @@ export function formatMeters(meters: number): string {
   return meters < 1000 ? `${Math.round(meters / 10) * 10}m` : `${(meters / 1000).toFixed(1)}km`;
 }
 
-// 랭킹. "전체"는 좋아요 − 싫어요. 같으면 가까운 순.
+// 랭킹. "이번 주"는 최근 7일 좋아요 × 2 + 꿀팁, "전체"는 좋아요 − 싫어요. 같으면 가까운 순.
 export type RankingPeriod = "week" | "all";
 
-export function rankPlaces(places: Place[], period: RankingPeriod): Place[] {
-  const score = period === "week" ? (p: Place) => p.weekly_score : (p: Place) => p.likes - p.dislikes;
-  return [...places].sort((a, b) => score(b) - score(a) || (a.walking_seconds ?? Infinity) - (b.walking_seconds ?? Infinity));
+export const WEEK_MS = 7 * 24 * 3600 * 1000;
+const WEEKLY_LIKE_POINTS = 2;
+const WEEKLY_TIP_POINTS = 1;
+
+/** 이번 주 랭킹 점수. 서버가 처음 계산할 때와 화면이 즉시 반영할 때 같은 공식을 쓴다 */
+export function weeklyScore(recentLikes: number, recentTips: number): number {
+  return recentLikes * WEEKLY_LIKE_POINTS + recentTips * WEEKLY_TIP_POINTS;
+}
+
+export type Ranking = {
+  /** 실제로 매긴 기준. 이번 주 기록이 비어 있으면 "week"를 달라고 해도 "all"이다 */
+  period: RankingPeriod;
+  /** "week"를 달라고 했는데 이번 주 기록이 없어 "all"로 바뀌었는지 */
+  fellBack: boolean;
+  ranked: Place[];
+};
+
+export function ranking(places: Place[], period: RankingPeriod): Ranking {
+  const fellBack = period === "week" && places.every((p) => p.weekly_score === 0);
+  const effective: RankingPeriod = fellBack ? "all" : period;
+  const score = effective === "week" ? (p: Place) => p.weekly_score : (p: Place) => p.likes - p.dislikes;
+  const ranked = [...places].sort((a, b) => score(b) - score(a) || (a.walking_seconds ?? Infinity) - (b.walking_seconds ?? Infinity));
+  return { period: effective, fellBack, ranked };
+}
+
+// 서버 응답을 기다리지 않고 화면에 먼저 반영하는 계산 (다시 불러오면 서버 값으로 덮인다)
+
+/** 내 평가가 prev → next로 바뀐 가게. 좋아요가 새로 생기면 이번 주 점수가 오르고, 좋아요를 거두면 내린다(0 아래로는 안 내려간다) */
+export function applyVote(place: Place, prev: MyVote, next: MyVote): Place {
+  const likeDelta = (next === 1 ? 1 : 0) - (prev === 1 ? 1 : 0);
+  return {
+    ...place,
+    likes: place.likes + likeDelta,
+    dislikes: place.dislikes - (prev === -1 ? 1 : 0) + (next === -1 ? 1 : 0),
+    weekly_score: Math.max(0, place.weekly_score + weeklyScore(likeDelta, 0)),
+  };
+}
+
+/** 내 키워드가 prev → next로 바뀐 가게 */
+export function applyKeywords(place: Place, prev: KeywordKey[], next: KeywordKey[]): Place {
+  const keywords = { ...place.keywords };
+  for (const k of prev) keywords[k] = (keywords[k] ?? 1) - 1;
+  for (const k of next) keywords[k] = (keywords[k] ?? 0) + 1;
+  return { ...place, keywords };
+}
+
+/** 꿀팁이 하나 달린 가게 */
+export function applyTip(place: Place): Place {
+  return { ...place, tip_count: place.tip_count + 1, weekly_score: place.weekly_score + weeklyScore(0, 1) };
 }
 
 export function topKeyword(place: Place): { key: KeywordKey; count: number } | null {
