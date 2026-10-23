@@ -2,7 +2,7 @@
 
 import { timeAgo, type Place, type Tip } from "@/lib/domain";
 import { exorcismTipIds } from "@/lib/halloween";
-import { CategoryDot, Walking } from "./PlaceList";
+import { CategoryDot, Walking } from "@/components/place/PlaceList";
 
 // 꿀팁 피드: 모든 가게의 최근 꿀팁. 누르면 그 가게로 간다.
 // 할로윈 이벤트 기간에는 가게마다 첫 꿀팁에 "유령 퇴치" 표시를 단다.

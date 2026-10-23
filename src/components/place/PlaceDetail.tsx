@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
 import { KEYWORDS, MAX_KEYWORDS_PER_PLACE, naverMapUrl, timeAgo, type KeywordKey, type MyVote, type Place, type TeamSummary, type Tip } from "@/lib/domain";
+import { canPutIntoBox } from "@/lib/drawBox";
 import { isGhost } from "@/lib/halloween";
 import type { PlaceTab } from "@/lib/naverPlaceId";
-import { CATEGORY_COLOR, CATEGORY_EMOJI } from "./categoryStyle";
-import { CategoryDot, Walking } from "./PlaceList";
+import { CATEGORY_COLOR, CATEGORY_EMOJI } from "@/components/place/categoryStyle";
+import { CategoryDot, Walking } from "@/components/place/PlaceList";
 
 const NAVER_TABS: { key: PlaceTab; label: string }[] = [
   { key: "menu", label: "📋 메뉴판" },
@@ -30,17 +31,22 @@ type Props = {
   /** 추첨통이 열려 있는 내 팀들. 비어 있으면 추첨통에 넣기 버튼을 숨긴다. */
   drawTeams: TeamSummary[];
   onAddToBox: (teamId: string) => Promise<void>;
+  /** 🎲 후보로 담았는지 */
+  dicePicked: boolean;
+  onDicePick: () => void;
   /** 할로윈 이벤트 기간이면 유령 가게 안내를 띄운다 */
   halloween?: boolean;
 };
 
-export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote, onKeywords, onBack, onTipAdded, openTab, onOpenTab, drawTeams, onAddToBox, halloween = false }: Props) {
+export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote, onKeywords, onBack, onTipAdded, openTab, onOpenTab, drawTeams, onAddToBox, dicePicked, onDicePick, halloween = false }: Props) {
   const [tips, setTips] = useState<Tip[] | null>(null);
   const [body, setBody] = useState("");
   const [nickname, setNickname] = useState(loadNickname);
   const [website, setWebsite] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bodyMissing, setBodyMissing] = useState(false);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [boxError, setBoxError] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
   // 방금 넣은 팀. at은 연달아 넣을 때 효과를 다시 틀기 위한 key
@@ -76,7 +82,12 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!body.trim()) return;
+    // 버튼을 막아 두지 않고, 눌렀을 때 무엇이 빠졌는지 알려 준다
+    if (!body.trim()) {
+      setBodyMissing(true);
+      bodyRef.current?.focus();
+      return;
+    }
     setSending(true);
     setError(null);
     try {
@@ -139,6 +150,12 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
           👎 싫어요 {place.dislikes}
         </button>
       </div>
+      <button
+        onClick={onDicePick}
+        className={`mt-2 w-full rounded-xl py-2.5 text-sm font-bold ${dicePicked ? "bg-brand/15 text-brand" : "bg-surface-2 hover:bg-line"}`}
+      >
+        {dicePicked ? "🎲 후보에 담았어요 · 빼기" : "🎲 오늘 뭐 먹지 후보에 담기"}
+      </button>
       {drawTeams.length > 0 && (
         <div className="mt-2 space-y-1.5">
           {drawTeams.map((t) => {
@@ -149,7 +166,7 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
               <button
                 key={just ? `${t.id}-${added.at}` : t.id}
                 onClick={() => void addToBox(t)}
-                disabled={!t.open_box?.remaining || adding === t.id}
+                disabled={!canPutIntoBox(t.open_box) || adding === t.id}
                 className={`relative w-full rounded-xl border py-2.5 text-sm font-bold transition-colors ${
                   just ? "lm-pop border-brand bg-brand text-brand-ink" : "border-brand/60 text-brand hover:bg-brand/10"
                 } ${just ? "" : "disabled:opacity-40"}`}
@@ -223,27 +240,41 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
       <h3 className="mt-7 text-lg font-black">💡 꿀팁 {tips ? tips.length : ""}</h3>
       <form onSubmit={submit} className="mt-2 space-y-2 rounded-xl border border-line bg-surface p-3">
         <textarea
+          ref={bodyRef}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => {
+            setBody(e.target.value);
+            if (bodyMissing) setBodyMissing(false);
+          }}
           maxLength={1000}
           rows={2}
+          aria-label="꿀팁 내용"
+          aria-invalid={bodyMissing}
           placeholder="추천 메뉴, 가격, 가는 길, 웨이팅… 꿀팁 남기기"
-          className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted"
+          className={`w-full resize-none rounded-lg border bg-background px-3 py-2 text-sm outline-none placeholder:text-muted ${
+            bodyMissing ? "border-danger" : "border-line focus:border-brand"
+          }`}
         />
         {/* 봇만 채우는 숨은 칸 */}
         <input value={website} onChange={(e) => setWebsite(e.target.value)} name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden />
         <div className="flex gap-2">
-          <input
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            maxLength={20}
-            placeholder="닉네임 (선택)"
-            className="min-w-0 flex-1 rounded-lg border border-line bg-background px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-brand"
-          />
-          <button disabled={sending || !body.trim()} className="rounded-lg bg-brand px-4 text-sm font-bold text-brand-ink disabled:opacity-40">
+          {/* 닉네임 칸에 꿀팁을 적는 실수가 잦아서, 값을 넣어도 "닉네임" 라벨이 남게 한다 */}
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-background px-3 focus-within:border-brand">
+            <span className="shrink-0 text-xs font-bold text-muted">닉네임</span>
+            <input
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              maxLength={20}
+              aria-label="닉네임"
+              placeholder="선택"
+              className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-muted"
+            />
+          </label>
+          <button disabled={sending} className="shrink-0 rounded-lg bg-brand px-4 text-sm font-bold text-brand-ink disabled:opacity-40">
             {sending ? "등록 중" : "남기기"}
           </button>
         </div>
+        {bodyMissing && <p className="text-xs font-bold text-danger">위 칸에 꿀팁 내용을 먼저 적어 주세요.</p>}
         {error && <p className="text-xs text-danger">{error}</p>}
       </form>
       <ul className="mt-2 space-y-2">

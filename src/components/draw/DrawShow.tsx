@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { DRAW_ANIMATIONS, type DrawAnimation, type Place } from "@/lib/domain";
-import { CATEGORY_EMOJI } from "./categoryStyle";
+import { CATEGORY_EMOJI } from "@/components/place/categoryStyle";
 
 // 추첨 연출. 결과는 서버가 이미 정했고(ADR 0004), 연출은 그 결과로 끝나도록 그린다.
 // 추첨통 ID를 씨앗으로 쓰므로 팀원 모두의 화면에서 같은 장면이 나온다.

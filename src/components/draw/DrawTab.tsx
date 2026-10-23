@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
-import { useHalloween } from "./useHalloween";
+import { drawBoxRules } from "@/lib/drawBox";
 import { DRAW_ANIMATIONS, DRAW_LIMITS, drawCandidates, drawWeights, MIN_DRAW_PLACES, type DrawAnimation, type DrawBox, type DrawLimit, type DrawResult, type Place, type TeamDetail, type TeamSummary } from "@/lib/domain";
-import { CategoryDot } from "./PlaceList";
-import { DrawShow, type ShowEntry } from "./DrawShow";
+import { CategoryDot } from "@/components/place/PlaceList";
+import { DrawShow, type ShowEntry } from "@/components/draw/DrawShow";
+import { useHalloween } from "@/components/ui/useHalloween";
 
 // 추첨 탭: 팀 목록 → 팀 화면(추첨통, 추첨 기록). 팀 화면은 몇 초마다 다시 불러
 // 조장이 추첨(다시 뽑기 포함)을 시작하면 지금 이 탭을 보고 있는 팀원 모두가 같은 연출을 본다.
@@ -267,14 +268,14 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
   const box = team?.open_box ?? null;
   const weights = box ? drawWeights(box.entries) : [];
   // 첫 추첨을 하면 더 넣거나 뺄 수 없고, 확률은 아직 뽑히지 않은 후보 안에서 다시 계산한다
-  const locked = !!box?.results.length;
+  const rules = box ? drawBoxRules({ perMemberLimit: box.per_member_limit, entries: box.entries, myEntryCount: box.entries.filter((e) => e.is_mine).length, results: box.results }) : null;
+  const locked = rules?.locked ?? false;
   const lastResult = box?.results.at(-1);
   const lastPlace = lastResult?.place_id ? byId.get(lastResult.place_id) : undefined;
-  const candidates = box ? drawCandidates(box.entries, box.results) : [];
-  const candidatePlaces = drawWeights(candidates).length;
-  const total = candidates.length;
-  const myUsed = box ? box.entries.filter((e) => e.is_mine).length : 0;
-  const remaining = box ? box.per_member_limit - myUsed : 0;
+  const candidatePlaces = rules?.candidatePlaces ?? 0;
+  const total = rules?.candidates.length ?? 0;
+  const remaining = rules?.remaining ?? 0;
+  const canPut = rules?.canPut ?? false;
   const memberCount = team?.members.length ?? 0;
   const putCount = box ? new Set(box.entries.map((e) => e.nickname)).size : 0;
   const q = query.trim();
@@ -400,7 +401,7 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
                         −
                       </button>
                     )}
-                    {!locked && remaining > 0 && (
+                    {canPut && (
                       <button onClick={() => void act(() => api.addEntry(summary.id, w.place_id))} disabled={busy} className="h-6 w-6 shrink-0 rounded-full bg-brand text-sm font-black text-brand-ink">
                         +
                       </button>
@@ -437,7 +438,7 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
           ) : (
             <p className="mt-4 text-xs font-bold text-muted">{remaining > 0 ? `내가 더 넣을 수 있는 횟수: ${remaining}번` : "넣을 수 있는 만큼 다 넣었어요"}</p>
           )}
-          {!locked && remaining > 0 && (
+          {canPut && (
             <>
               <input
                 value={query}
@@ -501,12 +502,12 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
                     setShow(showOf({ ...box, results: [...box.results, result] }, result, byId));
                   })
                 }
-                disabled={busy || candidatePlaces < MIN_DRAW_PLACES}
+                disabled={busy || !!rules?.drawBlock}
                 className={`mt-3 w-full rounded-xl py-3 font-black disabled:opacity-40 ${
                   locked ? "border border-line bg-background text-base" : "bg-brand text-lg text-brand-ink shadow-[0_0_30px_rgba(3,199,90,0.3)]"
                 }`}
               >
-                {candidatePlaces < MIN_DRAW_PLACES
+                {rules?.drawBlock
                   ? locked
                     ? "남은 가게가 1곳뿐이라 다시 뽑을 수 없어요"
                     : `가게가 ${MIN_DRAW_PLACES}곳 이상 있어야 해요`
