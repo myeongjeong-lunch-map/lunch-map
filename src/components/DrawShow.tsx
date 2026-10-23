@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import type { DrawAnimation, Place } from "@/lib/domain";
+import { DRAW_ANIMATIONS, type DrawAnimation, type Place } from "@/lib/domain";
 import { CATEGORY_EMOJI } from "./categoryStyle";
 
 // 추첨 연출. 결과는 서버가 이미 정했고(ADR 0004), 연출은 그 결과로 끝나도록 그린다.
@@ -205,6 +205,90 @@ function Plinko({ entries, winnerId, seed, onEnd }: { entries: ShowEntry[]; winn
   );
 }
 
+// ── 마녀의 솥 (할로윈): 넣은 횟수만큼 가게 거품이 부글부글 올라오다가, 정해진 가게가 솥에서 튀어나온다.
+const BREW_MS = 5200;
+const RISE_MS = 1500;
+
+function planCauldron(entries: ShowEntry[], seed: string) {
+  const r = rng(seed);
+  const total = entries.reduce((s, e) => s + e.weight, 0);
+  // 넣은 횟수에 비례해 거품 수를 나눈다 (전체 최대 28개)
+  const scale = Math.min(3, 28 / total);
+  return entries.flatMap((e) =>
+    Array.from({ length: Math.max(1, Math.round(e.weight * scale)) }, () => ({
+      place: e.place,
+      x: (r() - 0.5) * 150,
+      delay: r() * (BREW_MS - RISE_MS),
+      drift: (r() - 0.5) * 50,
+      height: 110 + r() * 90,
+    })),
+  );
+}
+
+function Cauldron({ entries, winnerId, seed, onEnd }: { entries: ShowEntry[]; winnerId: string; seed: string; onEnd: () => void }) {
+  const [bubbles] = useState(() => planCauldron(entries, seed));
+  const t = useElapsed();
+  const total = entries.reduce((s, e) => s + e.weight, 0);
+  const winner = entries.find((e) => e.place.id === winnerId)?.place;
+  const reveal = Math.max(0, Math.min(1, (t - BREW_MS) / 900));
+  const ended = t > BREW_MS + 1800;
+  useEffect(() => {
+    if (ended) onEnd();
+  }, [ended, onEnd]);
+
+  return (
+    <div className="flex w-full max-w-sm flex-col items-center">
+      <div className="relative h-[330px] w-[320px] overflow-hidden">
+        {bubbles.map((b, i) => {
+          const p = (t - b.delay) / RISE_MS;
+          if (p < 0 || p > 1) return null;
+          return (
+            <span
+              key={i}
+              className="absolute bottom-[96px] left-1/2 flex items-center gap-1 rounded-full bg-[#7cff6b]/20 px-2 py-0.5 text-xs font-bold text-foreground"
+              style={{
+                transform: `translate(calc(-50% + ${b.x + b.drift * p}px), ${-b.height * p}px) scale(${0.6 + p * 0.5})`,
+                opacity: p < 0.15 ? p / 0.15 : 1 - Math.max(0, p - 0.7) / 0.3,
+              }}
+            >
+              {CATEGORY_EMOJI[b.place.category]} <span className="max-w-[90px] truncate">{b.place.name}</span>
+            </span>
+          );
+        })}
+        {winner && reveal > 0 && (
+          <span
+            className="absolute bottom-[96px] left-1/2 z-10 flex items-center gap-2 rounded-2xl bg-brand px-4 py-2 text-lg font-black text-brand-ink shadow-[0_0_40px_rgba(124,255,107,0.6)]"
+            style={{ transform: `translate(-50%, ${-150 * reveal}px) scale(${0.6 + reveal * 0.6})`, opacity: reveal }}
+          >
+            {CATEGORY_EMOJI[winner.category]} {winner.name}
+          </span>
+        )}
+        <svg viewBox="0 0 320 130" className="absolute bottom-0 left-0 w-full" aria-hidden>
+          <ellipse cx="160" cy="28" rx="112" ry="16" fill="#7cff6b" opacity={0.85 - reveal * 0.3} />
+          <path d="M44 30 Q30 120 110 122 L210 122 Q290 120 276 30 Z" fill="#1b1b22" />
+          <ellipse cx="160" cy="28" rx="122" ry="14" fill="none" stroke="#2b2b35" strokeWidth="10" />
+          <path d="M100 122 L84 130 M220 122 L236 130" stroke="#1b1b22" strokeWidth="8" strokeLinecap="round" />
+          <text x="160" y="92" textAnchor="middle" fontSize="28">
+            🎃
+          </text>
+        </svg>
+      </div>
+      <ul className="mt-3 grid w-full grid-cols-2 gap-x-3 gap-y-1 text-xs font-bold">
+        {entries.map((e) => (
+          <li key={e.place.id} className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate">
+              {CATEGORY_EMOJI[e.place.category]} {e.place.name}
+            </span>
+            <span className="shrink-0 text-muted">
+              🎟️×{e.weight} · {Math.round((e.weight / total) * 100)}%
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function DrawShow({ animation, entries, winnerId, seed, onClose, onShowPlace }: Props) {
   const [done, setDone] = useState(false);
   const onEnd = useCallback(() => setDone(true), []);
@@ -212,9 +296,11 @@ export function DrawShow({ animation, entries, winnerId, seed, onClose, onShowPl
 
   return createPortal(
     <div className="fixed inset-0 z-[1100] flex flex-col items-center justify-center gap-6 overflow-y-auto bg-background/95 px-4 py-8 text-foreground backdrop-blur">
-      <p className="text-sm font-bold tracking-widest text-brand">{animation === "race" ? "🏇 경주" : "🎯 플링코"} 추첨</p>
+      <p className="text-sm font-bold tracking-widest text-brand">{DRAW_ANIMATIONS.find((a) => a.key === animation)?.label} 추첨</p>
       {animation === "race" ? (
         <Race entries={entries} winnerId={winnerId} seed={seed} onEnd={onEnd} />
+      ) : animation === "cauldron" ? (
+        <Cauldron entries={entries} winnerId={winnerId} seed={seed} onEnd={onEnd} />
       ) : (
         <Plinko entries={entries} winnerId={winnerId} seed={seed} onEnd={onEnd} />
       )}

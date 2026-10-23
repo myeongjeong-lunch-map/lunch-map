@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
+import { useHalloween } from "./useHalloween";
 import { DRAW_ANIMATIONS, DRAW_LIMITS, drawCandidates, drawWeights, MIN_DRAW_PLACES, type DrawAnimation, type DrawBox, type DrawLimit, type DrawResult, type Place, type TeamDetail, type TeamSummary } from "@/lib/domain";
 import { CategoryDot } from "./PlaceList";
 import { DrawShow, type ShowEntry } from "./DrawShow";
@@ -198,6 +199,9 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [limit, setLimit] = useState<DrawLimit>(2);
+  const halloween = useHalloween();
+  // 마녀의 솥은 할로윈 이벤트 기간에만 고를 수 있다
+  const animations = DRAW_ANIMATIONS.filter((a) => a.key !== "cauldron" || halloween);
   const [animation, setAnimation] = useState<DrawAnimation>("race");
   const [query, setQuery] = useState("");
   const [nickname, setNickname] = useState(loadNickname);
@@ -477,8 +481,8 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
                 </button>
               )}
               <p className="text-xs font-bold text-muted">연출</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {DRAW_ANIMATIONS.map((a) => (
+              <div className={`mt-2 grid gap-2 ${animations.length > 2 ? "grid-cols-3" : "grid-cols-2"}`}>
+                {animations.map((a) => (
                   <button
                     key={a.key}
                     onClick={() => setAnimation(a.key)}

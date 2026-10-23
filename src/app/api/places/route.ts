@@ -3,6 +3,7 @@ import { isCategory, isKeyword, MAX_KEYWORDS_PER_PLACE, type KeywordKey, type My
 import { db } from "@/lib/server/supabase";
 import { cleanText, ensureVoterId, errorResponse, guardWrite, HttpError, readVoterId } from "@/lib/server/guard";
 import { computeWalking } from "@/lib/server/walking";
+import { HALLOWEEN_START } from "@/lib/halloween";
 import { resolveNaverPlaceId } from "@/lib/naverPlaceId";
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;
@@ -10,13 +11,14 @@ const WEEK_MS = 7 * 24 * 3600 * 1000;
 export async function GET(req: NextRequest) {
   try {
     const since = new Date(Date.now() - WEEK_MS).toISOString();
-    const [summaries, keywords, weekLikes, weekTips] = await Promise.all([
+    const [summaries, keywords, weekLikes, weekTips, eventTips] = await Promise.all([
       db().from("place_summaries").select("*"),
       db().from("place_keywords").select("place_id, keyword, voter_id"),
       db().from("votes").select("place_id").eq("value", 1).gte("updated_at", since),
       db().from("tips").select("place_id").gte("created_at", since),
+      db().from("tips").select("place_id").gte("created_at", new Date(HALLOWEEN_START).toISOString()),
     ]);
-    for (const r of [summaries, keywords, weekLikes, weekTips]) if (r.error) throw r.error;
+    for (const r of [summaries, keywords, weekLikes, weekTips, eventTips]) if (r.error) throw r.error;
 
     const voterId = readVoterId(req);
     const keywordCounts = new Map<string, Partial<Record<KeywordKey, number>>>();
@@ -31,7 +33,15 @@ export async function GET(req: NextRequest) {
     for (const v of weekLikes.data ?? []) weekly.set(v.place_id, (weekly.get(v.place_id) ?? 0) + 2);
     for (const t of weekTips.data ?? []) weekly.set(t.place_id, (weekly.get(t.place_id) ?? 0) + 1);
 
-    const places: Place[] = (summaries.data ?? []).map((p) => ({ ...p, keywords: keywordCounts.get(p.id) ?? {}, weekly_score: weekly.get(p.id) ?? 0 }));
+    const eventCount = new Map<string, number>();
+    for (const t of eventTips.data ?? []) eventCount.set(t.place_id, (eventCount.get(t.place_id) ?? 0) + 1);
+
+    const places: Place[] = (summaries.data ?? []).map((p) => ({
+      ...p,
+      keywords: keywordCounts.get(p.id) ?? {},
+      weekly_score: weekly.get(p.id) ?? 0,
+      event_tips: eventCount.get(p.id) ?? 0,
+    }));
 
     const myVotes: Record<string, MyVote> = {};
     if (voterId) {

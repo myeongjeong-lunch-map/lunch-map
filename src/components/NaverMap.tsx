@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { isGhost } from "@/lib/halloween";
 import { CAMPUS, type Place } from "@/lib/domain";
 import { CATEGORY_EMOJI } from "./categoryStyle";
 
@@ -46,6 +47,8 @@ function escapeHtml(s: string): string {
 type Props = {
   places: Place[];
   selectedId: string | null;
+  /** 할로윈 이벤트: 핀이 🎃, 유령 가게는 👻 */
+  halloween?: boolean;
   onSelect: (id: string | null) => void;
   /** 가게 추가 시 핀 직접 꽂기 모드 */
   pickMode: boolean;
@@ -55,7 +58,7 @@ type Props = {
   bottomInset: number;
 };
 
-export function NaverMap({ places, selectedId, onSelect, pickMode, picked, onPick, bottomInset }: Props) {
+export function NaverMap({ places, selectedId, halloween = false, onSelect, pickMode, picked, onPick, bottomInset }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
@@ -121,7 +124,9 @@ export function NaverMap({ places, selectedId, onSelect, pickMode, picked, onPic
     for (const p of places) {
       seen.add(p.id);
       const selected = p.id === selectedId;
-      const content = `<div class="lm-marker${selected ? " selected" : ""}"><span class="emoji">${CATEGORY_EMOJI[p.category]}</span><span class="label">${escapeHtml(p.name)}</span></div>`;
+      const ghost = halloween && isGhost(p);
+      const emoji = halloween ? (ghost ? "👻" : "🎃") : CATEGORY_EMOJI[p.category];
+      const content = `<div class="lm-marker${selected ? " selected" : ""}${ghost ? " ghost" : ""}"><span class="emoji">${emoji}</span><span class="label">${escapeHtml(p.name)}</span></div>`;
       const existing = markers.current.get(p.id);
       if (existing) {
         existing.setIcon({ content });
@@ -143,7 +148,7 @@ export function NaverMap({ places, selectedId, onSelect, pickMode, picked, onPic
         markers.current.delete(id);
       }
     }
-  }, [places, selectedId, ready]);
+  }, [places, selectedId, halloween, ready]);
 
   // 선택한 가게로 이동 (모바일 시트에 가리지 않게 위로 올린다)
   useEffect(() => {
