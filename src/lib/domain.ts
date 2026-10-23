@@ -85,10 +85,21 @@ export type WalkCourse = { id: string; name: string; summary: string | null; sto
 /** a가 null이면 캠퍼스. 방향 없음 */
 export type WalkLeg = { a: string | null; b: string; seconds: number; meters: number; source: "tmap" | "estimate" };
 
+/**
+ * 구간을 저장하는 방식(짝). 방향 없이 같은 쌍이면 같은 짝이다.
+ * 캠퍼스(null)는 늘 a, 장소끼리는 id가 작은 쪽이 a. forward는 x → y가 저장 방향(a → b)과 같은지.
+ * 이 규칙은 여기에만 있다. 서버 저장소와 legKey가 같이 쓴다.
+ */
+export function legPair(x: string | null, y: string | null): { a: string | null; b: string; forward: boolean } {
+  if (x === null) return { a: null, b: y as string, forward: true };
+  if (y === null) return { a: null, b: x, forward: false };
+  return x < y ? { a: x, b: y, forward: true } : { a: y, b: x, forward: false };
+}
+
 /** 구간 찾기 키. 방향 없이 같은 쌍이면 같은 키. null(캠퍼스)은 "campus" */
 export function legKey(x: string | null, y: string | null): string {
-  if (x === null || y === null) return `campus|${x ?? y}`;
-  return x < y ? `${x}|${y}` : `${y}|${x}`;
+  const { a, b } = legPair(x, y);
+  return `${a ?? "campus"}|${b}`;
 }
 
 export function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -98,6 +109,20 @@ export function haversine(lat1: number, lng1: number, lat2: number, lng2: number
   const dLng = toRad(lng2 - lng1);
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/** 직선거리에 곱해 보행 거리로 보는 값 */
+const DETOUR = 1.3;
+/** 시속 4km */
+const WALK_METERS_PER_SECOND = 4000 / 3600;
+
+/** TMAP을 못 쓸 때의 추정값: 직선거리 × 1.3 을 시속 4km로 걸은 값. 서버와 화면이 같이 쓴다 */
+export function estimateWalk(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number },
+): { seconds: number; meters: number } {
+  const meters = Math.round(haversine(from.lat, from.lng, to.lat, to.lng) * DETOUR);
+  return { seconds: Math.round(meters / WALK_METERS_PER_SECOND), meters };
 }
 
 export type CourseTime = {
@@ -126,8 +151,7 @@ export function courseTime(stops: WalkCourseStop[], spots: Map<string, WalkSpot>
     const to = y ? spots.get(y) : null;
     const a = from ?? CAMPUS;
     const b = to ?? CAMPUS;
-    const meters = Math.round(haversine(a.lat, a.lng, b.lat, b.lng) * 1.3);
-    out.push({ seconds: Math.round(meters / (4000 / 3600)), meters, source: "missing" });
+    out.push({ ...estimateWalk(a, b), source: "missing" });
   }
   const walkSeconds = out.reduce((n, l) => n + l.seconds, 0);
   const stayMinutes = stops.reduce((n, s) => n + (s.stay_minutes ?? spots.get(s.spot_id)?.stay_minutes ?? 0), 0);
@@ -144,8 +168,9 @@ export function courseTime(stops: WalkCourseStop[], spots: Map<string, WalkSpot>
 /** 캠퍼스 → 산책 장소 한 방향 걷기. 구간이 아직 없으면 직선거리로 어림잡는다 */
 export function campusWalk(spot: WalkSpot, legs: Map<string, WalkLeg>): { minutes: number; meters: number; rough: boolean } {
   const known = legs.get(legKey(null, spot.id));
-  const meters = known?.meters ?? Math.round(haversine(CAMPUS.lat, CAMPUS.lng, spot.lat, spot.lng) * 1.3);
-  const seconds = known?.seconds ?? Math.round(meters / (4000 / 3600));
+  const guess = known ? null : estimateWalk(CAMPUS, spot);
+  const meters = known?.meters ?? guess!.meters;
+  const seconds = known?.seconds ?? guess!.seconds;
   return { minutes: Math.max(1, Math.round(seconds / 60)), meters, rough: known?.source !== "tmap" };
 }
 

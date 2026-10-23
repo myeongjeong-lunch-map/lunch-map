@@ -2,12 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/server/supabase";
 import { errorResponse, HttpError } from "@/lib/server/guard";
 import { MAX_COURSE_STOPS } from "@/lib/domain";
-
-const DAY_MS = 24 * 3600 * 1000;
+import { readCoursePaths } from "@/lib/server/walkingStore";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-type Path = [number, number][];
 
 // 쉼표로 나눈 산책 장소 id 1~5개, 중복 없음
 function parseStops(raw: string | null): string[] {
@@ -29,21 +26,8 @@ export async function GET(req: NextRequest) {
     if (sErr) throw sErr;
     if ((spots ?? []).length !== ids.length) throw new HttpError(404, "산책 장소를 찾을 수 없어요.");
 
-    // spot_a < spot_b 로 저장하므로, 코스에 든 장소끼리의 구간은 spot_b가 코스 안에 있으면 모두 잡힌다
-    const { data: rows, error } = await db().from("walk_legs").select("spot_a, spot_b, path, updated_at").in("spot_b", ids);
-    if (error) throw error;
-    const byPair = new Map((rows ?? []).map((r) => [`${r.spot_a ?? "campus"}|${r.spot_b}`, r]));
-
-    const points: (string | null)[] = [null, ...ids, null];
-    const legs = points.slice(0, -1).map((from, i) => {
-      const to = points[i + 1];
-      // 저장 방향: 캠퍼스 → 장소, 장소끼리는 id가 작은 쪽 → 큰 쪽
-      const forward = from === null || (to !== null && from < to);
-      const row = from === null ? byPair.get(`campus|${to}`) : to === null ? byPair.get(`campus|${from}`) : forward ? byPair.get(`${from}|${to}`) : byPair.get(`${to}|${from}`);
-      const fresh = row && Date.now() - new Date(row.updated_at).getTime() < DAY_MS;
-      const path = fresh ? (row.path as Path | null) : null;
-      return { path: path ? (forward ? path : [...path].reverse()) : null };
-    });
+    const paths = await readCoursePaths(ids);
+    const legs = paths.map((path) => ({ path }));
     return NextResponse.json({ legs });
   } catch (e) {
     return errorResponse(e);
