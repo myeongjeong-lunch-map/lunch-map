@@ -315,3 +315,13 @@ body {
 .lm-dim-places .lm-marker:not(.candidate):not(.campus):not(.pick) {
   opacity: 0.35;
 }
+
+/* 내 위치: 파란 점 (정확도 원은 지도 Circle로 그린다) */
+.lm-me {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #4285f4;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.35);
+}

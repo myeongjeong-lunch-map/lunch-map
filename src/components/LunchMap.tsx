@@ -498,6 +498,7 @@ export function LunchMap() {
             setSnap("full");
           }}
           bottomInset={!isDesktop && snap === "half" ? window.innerHeight * 0.5 : 0}
+          coveredBottom={isDesktop ? 0 : snap === "peek" ? 180 : snap === "half" ? window.innerHeight * 0.5 : window.innerHeight - 48}
           candidates={mode.kind === "add" ? candidates : null}
           chosenCandidate={chosenCandidate}
           onPickCandidate={(index) => setMapChoice((c) => ({ index, n: (c?.n ?? 0) + 1 }))}
