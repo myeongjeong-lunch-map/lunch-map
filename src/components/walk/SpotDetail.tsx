@@ -1,20 +1,19 @@
 "use client";
 
-import { WALK_KIND_EMOJI, WALK_KIND_LABEL, campusWalk, naverMapUrl, type WalkLeg, type WalkSpot } from "@/lib/domain";
+import { WALK_KIND_EMOJI, WALK_KIND_LABEL, naverMapUrl, type WalkSpot } from "@/lib/domain";
+import type { WalkMap } from "@/components/walk/useWalkMap";
 
 type Props = {
   spot: WalkSpot;
-  legs: Map<string, WalkLeg>;
+  walk: WalkMap;
   backLabel: string;
-  inDraft: boolean;
-  /** 내 코스가 가득 찼으면 더 담을 수 없다 */
-  draftFull: boolean;
-  onToggleDraft: () => void;
   onBack: () => void;
 };
 
-export function SpotDetail({ spot, legs, backLabel, inDraft, draftFull, onToggleDraft, onBack }: Props) {
-  const walk = campusWalk(spot, legs);
+export function SpotDetail({ spot, walk: walkMap, backLabel, onBack }: Props) {
+  const walk = walkMap.campusWalk(spot);
+  const { draft } = walkMap;
+  const inDraft = draft.has(spot.id);
   return (
     <div className="px-5 pb-8 pt-1">
       <button onClick={onBack} className="py-2 text-sm font-bold text-muted hover:text-foreground">
@@ -34,11 +33,11 @@ export function SpotDetail({ spot, legs, backLabel, inDraft, draftFull, onToggle
       </p>
       <div className="mt-4 flex gap-2">
         <button
-          onClick={onToggleDraft}
-          disabled={!inDraft && draftFull}
+          onClick={() => draft.toggle(spot.id)}
+          disabled={!inDraft && draft.full}
           className={`flex-1 rounded-2xl py-3 text-sm font-black active:scale-[0.98] disabled:opacity-40 ${inDraft ? "border border-line" : "bg-brand text-brand-ink"}`}
         >
-          {inDraft ? "내 코스에서 빼기" : draftFull ? "내 코스가 다 찼어요" : "내 코스에 담기"}
+          {inDraft ? "내 코스에서 빼기" : draft.full ? "내 코스가 다 찼어요" : "내 코스에 담기"}
         </button>
         <a
           href={naverMapUrl({ name: spot.name, road_address: "서울 서초구", naver_place_id: spot.naver_place_id })}

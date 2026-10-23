@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/server/supabase";
 import { cleanText, ensureVoterId, errorResponse, guardWrite, HttpError, readVoterId } from "@/lib/server/guard";
-import { listTeams } from "@/lib/server/teams";
+import { listTeams } from "@/lib/server/teamViews";
 
 // 팀 목록: 누구나 보고 골라서 들어올 수 있다
 export async function GET(req: NextRequest) {

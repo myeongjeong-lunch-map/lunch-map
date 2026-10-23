@@ -1,32 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { api, loadWalkDraft, saveWalkDraft, type WalkResponse } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { api } from "@/lib/api";
+import { acceptsEntries } from "@/lib/drawBox";
 import {
-  CAMPUS,
-  MAX_COURSE_STOPS,
-  courseTime,
-  formatMeters,
-  legKey,
-  rankPlaces,
-  type KeywordKey,
-  type MyVote,
-  type Place,
+  ranking,
   type RankingPeriod,
   type TeamSummary,
-  type Tip,
-  type WalkCourseStop,
-  type WalkLeg,
-  type WalkSpot,
 } from "@/lib/domain";
+import { usePlaceList } from "@/lib/usePlaceList";
 import type { PlaceTab } from "@/lib/naverPlaceId";
-import { NaverMap, type MapRoute } from "@/components/map/NaverMap";
+import { NaverMap } from "@/components/map/NaverMap";
+import { usePlaceRouteLine, useWalkRouteLine } from "@/components/map/routeLine";
 import { PlaceList, applyFilters, isFiltered, DEFAULT_FILTERS, type Filters } from "@/components/place/PlaceList";
 import { RankingList } from "@/components/place/RankingList";
 import { TipFeed } from "@/components/place/TipFeed";
 import { WalkPanel } from "@/components/walk/WalkPanel";
 import { CourseDetail } from "@/components/walk/CourseDetail";
 import { SpotDetail } from "@/components/walk/SpotDetail";
+import { useWalkMap } from "@/components/walk/useWalkMap";
 import { PlaceDetail } from "@/components/place/PlaceDetail";
 import { AddPlace } from "@/components/place/AddPlace";
 import { BottomSheet, type SheetSnap } from "@/components/ui/BottomSheet";
@@ -63,16 +55,9 @@ type Mode =
   | { kind: "spot"; id: string }
   | { kind: "course"; courseId: string | null };
 
-/** 코스·장소 보기에서 불러온 구간별 경로. key는 어느 장소들의 경로인지 (늦게 온 응답을 거르는 데 쓴다). legs가 null이면 불러오지 못한 것 */
-type WalkPathState = { key: string; legs: { path: [number, number][] | null }[] | null };
-
 export function LunchMap() {
   const isDesktop = useIsDesktop();
-  const [places, setPlaces] = useState<Place[] | null>(null);
-  const [myVotes, setMyVotes] = useState<Record<string, MyVote>>({});
-  const [myKeywords, setMyKeywords] = useState<Record<string, KeywordKey[]>>({});
-  const [recentTips, setRecentTips] = useState<Tip[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { places, myVotes, myKeywords, recentTips, loadError, reload, vote, setKeywords, addTip } = usePlaceList();
   const [tab, setTab] = useState<Tab>("rank");
   const [period, setPeriod] = useState<RankingPeriod>("week");
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
@@ -84,41 +69,7 @@ export function LunchMap() {
   const [teams, setTeams] = useState<TeamSummary[] | null>(null);
   const [teamsError, setTeamsError] = useState<string | null>(null);
   const [teamId, setTeamIdState] = useState<string | null>(null);
-  const [walk, setWalk] = useState<WalkResponse | null>(null);
-  const [walkError, setWalkError] = useState<string | null>(null);
-  const [walkDraft, setWalkDraft] = useState<string[]>([]);
-  const [walkMaxMinutes, setWalkMaxMinutes] = useState<30 | 45 | null>(null);
-  const [walkPath, setWalkPath] = useState<WalkPathState | null>(null);
-  const queue = useRef(new Map<string, Promise<unknown>>());
-
-  const reload = useCallback(async () => {
-    try {
-      const [data, tips] = await Promise.all([api.places(), api.recentTips()]);
-      setPlaces(data.places);
-      setMyVotes(data.myVotes);
-      setMyKeywords(data.myKeywords);
-      setRecentTips(tips.tips);
-      setLoadError(null);
-    } catch (e) {
-      setLoadError((e as Error).message);
-    }
-  }, []);
-
-  useEffect(() => {
-    // 마운트 시 한 번 불러온다
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void reload();
-  }, [reload]);
-
-  useEffect(() => {
-    // 마운트 시 산책 장소·코스를 불러오고, 이 브라우저에 기억해 둔 내 코스를 연다 (localStorage는 서버 렌더 때 읽을 수 없다)
-    api
-      .walk()
-      .then((data) => setWalk(data))
-      .catch((e: Error) => setWalkError(e.message));
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setWalkDraft(loadWalkDraft());
-  }, []);
+  const walk = useWalkMap();
 
   const reloadTeams = useCallback(async () => {
     try {
@@ -165,82 +116,18 @@ export function LunchMap() {
 
   const all = useMemo(() => places ?? [], [places]);
 
-  // 산책: 장소·추천 코스·구간 (코스 시간은 courseTime이 구간을 더해서 구한다)
-  const walkSpotList = useMemo(() => walk?.spots ?? [], [walk]);
-  const spotMap = useMemo(() => new Map<string, WalkSpot>(walkSpotList.map((sp) => [sp.id, sp])), [walkSpotList]);
-  const legMap = useMemo(() => new Map<string, WalkLeg>((walk?.legs ?? []).map((l) => [legKey(l.a, l.b), l])), [walk]);
-  // 지워진 장소가 내 코스에 남아 있으면 화면에서 거른다
-  const draftIds = useMemo(() => walkDraft.filter((id) => spotMap.has(id)), [walkDraft, spotMap]);
-  const draftStops = useMemo<WalkCourseStop[]>(() => draftIds.map((id) => ({ spot_id: id, stay_minutes: null })), [draftIds]);
-  const draftSet = useMemo(() => new Set(draftIds), [draftIds]);
-  const draftTime = useMemo(() => courseTime(draftStops, spotMap, legMap), [draftStops, spotMap, legMap]);
-  const openedCourse = mode.kind === "course" ? (mode.courseId === null ? null : (walk?.courses.find((c) => c.id === mode.courseId) ?? undefined)) : undefined;
-  const courseStops = useMemo<WalkCourseStop[]>(
-    () => (mode.kind !== "course" ? [] : openedCourse === null ? draftStops : (openedCourse?.stops.filter((st) => spotMap.has(st.spot_id)) ?? [])),
-    [mode.kind, openedCourse, draftStops, spotMap],
-  );
-  const openedSpot = mode.kind === "spot" ? (spotMap.get(mode.id) ?? null) : null;
-  const routeIds = useMemo(() => (mode.kind === "spot" ? (openedSpot ? [openedSpot.id] : []) : courseStops.map((st) => st.spot_id)), [mode.kind, openedSpot, courseStops]);
-  const routeKey = routeIds.join(",");
-  const openedTime = useMemo(() => courseTime(courseStops, spotMap, legMap), [courseStops, spotMap, legMap]);
+  // 산책: 지금 열린 코스(내 코스면 courseId가 null)와 열린 장소. 경로선은 산책 지도 모듈이 계산한 값을 그대로 쓴다
+  const openedCourse = useMemo(() => (mode.kind === "course" ? walk.course(mode.courseId) : null), [mode, walk]);
+  const openedSpot = mode.kind === "spot" ? (walk.spotMap.get(mode.id) ?? null) : null;
+  const routeIds = useMemo(() => (mode.kind === "spot" ? (openedSpot ? [openedSpot.id] : []) : (openedCourse?.stopIds ?? [])), [mode.kind, openedSpot, openedCourse]);
+  const walkRoute = useWalkRouteLine({
+    stopIds: routeIds,
+    spots: walk.spotMap,
+    time: openedCourse?.time ?? null,
+    leg: openedSpot ? walk.campusLeg(openedSpot.id) : undefined,
+    oneWay: mode.kind === "spot",
+  });
 
-  useEffect(() => {
-    // 코스·장소를 볼 때 구간별 경로를 받는다. 다른 코스로 바뀌면 늦게 온 응답은 버린다
-    if (!routeKey) return;
-    let cancelled = false;
-    api
-      .walkPath(routeKey.split(","))
-      .then((r) => !cancelled && setWalkPath({ key: routeKey, legs: r.legs }))
-      .catch(() => !cancelled && setWalkPath({ key: routeKey, legs: null }));
-    return () => {
-      cancelled = true;
-    };
-  }, [routeKey]);
-
-  const mapRoute = useMemo<MapRoute | null>(() => {
-    if (routeIds.length === 0) return null;
-    const spotsOnRoute = routeIds.map((id) => spotMap.get(id)!);
-    // 아직 받는 중이면 마커와 지도 맞춤만 하고 선은 나중에 그린다
-    if (walkPath?.key !== routeKey) return { stops: spotsOnRoute, path: null, dashed: false, chip: null };
-    const points = [CAMPUS, ...spotsOnRoute, CAMPUS];
-    // 장소 보기는 캠퍼스 → 장소 한 구간만 그린다
-    const legCount = mode.kind === "spot" ? 1 : points.length - 1;
-    const stored = walkPath.legs ?? [];
-    const path: [number, number][] = [];
-    let dashed = false;
-    for (let i = 0; i < legCount; i++) {
-      const from = points[i];
-      const to = points[i + 1];
-      const p = stored[i]?.path ?? null;
-      if (!p) dashed = true;
-      path.push([from.lng, from.lat], ...(p ?? []), [to.lng, to.lat]);
-    }
-    let chip: string | null;
-    if (mode.kind === "spot") {
-      const l = legMap.get(legKey(null, routeIds[0]));
-      chip = l ? `${formatMeters(l.meters)} · 걸어서 ${l.source === "tmap" ? "" : "약 "}${Math.max(1, Math.round(l.seconds / 60))}분` : null;
-    } else {
-      chip = `${formatMeters(openedTime.meters)} · ${openedTime.rough ? "약 " : ""}${openedTime.totalMinutes}분`;
-    }
-    return { stops: spotsOnRoute, path, dashed, chip };
-  }, [routeIds, routeKey, walkPath, mode.kind, spotMap, legMap, openedTime]);
-
-  const updateDraft = (ids: string[]) => {
-    setWalkDraft(ids);
-    saveWalkDraft(ids);
-  };
-  const draftFull = draftIds.length >= MAX_COURSE_STOPS;
-  const toggleDraftSpot = (id: string) => {
-    if (draftSet.has(id)) updateDraft(draftIds.filter((x) => x !== id));
-    else if (!draftFull) updateDraft([...draftIds, id]);
-  };
-  const moveDraftSpot = (index: number, delta: -1 | 1) => {
-    const to = index + delta;
-    if (to < 0 || to >= draftIds.length) return;
-    const next = [...draftIds];
-    [next[index], next[to]] = [next[to], next[index]];
-    updateDraft(next);
-  };
   const raiseSheet = () => setSnap((s) => (s === "peek" ? "half" : s));
   const openSpot = (id: string) => {
     setMode({ kind: "spot", id });
@@ -260,6 +147,7 @@ export function LunchMap() {
   const selected = selectedId ? all.find((p) => p.id === selectedId) ?? null : null;
   const placeTab = mode.kind === "detail" ? mode.tab : undefined;
   const mapPlaces = tab === "list" ? listed : all;
+  const placeRoute = usePlaceRouteLine(selected);
 
   const select = useCallback((id: string | null) => {
     if (id) {
@@ -270,46 +158,6 @@ export function LunchMap() {
     }
   }, []);
   const setPlaceTab = (t: PlaceTab | undefined) => setMode((m) => (m.kind === "detail" ? { ...m, tab: t } : m));
-
-  // 같은 가게에 연달아 누르면 요청이 순서대로 가도록 이어 붙인다
-  const enqueue = (key: string, fn: () => Promise<unknown>) => {
-    const next = (queue.current.get(key) ?? Promise.resolve()).then(fn).catch(() => reload());
-    queue.current.set(key, next);
-  };
-
-  const vote = (placeId: string, value: MyVote) => {
-    const prev = myVotes[placeId] ?? 0;
-    const next: MyVote = prev === value ? 0 : value;
-    setMyVotes((v) => ({ ...v, [placeId]: next }));
-    setPlaces((ps) =>
-      (ps ?? []).map((p) =>
-        p.id !== placeId
-          ? p
-          : { ...p, likes: p.likes - (prev === 1 ? 1 : 0) + (next === 1 ? 1 : 0), dislikes: p.dislikes - (prev === -1 ? 1 : 0) + (next === -1 ? 1 : 0) },
-      ),
-    );
-    enqueue(`vote:${placeId}`, () => api.vote(placeId, next));
-  };
-
-  const setKeywords = (placeId: string, next: KeywordKey[]) => {
-    const prev = myKeywords[placeId] ?? [];
-    setMyKeywords((m) => ({ ...m, [placeId]: next }));
-    setPlaces((ps) =>
-      (ps ?? []).map((p) => {
-        if (p.id !== placeId) return p;
-        const keywords = { ...p.keywords };
-        for (const k of prev) keywords[k] = (keywords[k] ?? 1) - 1;
-        for (const k of next) keywords[k] = (keywords[k] ?? 0) + 1;
-        return { ...p, keywords };
-      }),
-    );
-    enqueue(`kw:${placeId}`, () => api.setKeywords(placeId, next));
-  };
-
-  const onTipAdded = (tip: Tip) => {
-    setRecentTips((ts) => [tip, ...(ts ?? [])]);
-    setPlaces((ps) => (ps ?? []).map((p) => (p.id === tip.place_id ? { ...p, tip_count: p.tip_count + 1 } : p)));
-  };
 
   // 🎲 오늘 뭐 먹지: 목록 탭에서 필터를 걸었으면 그 안에서 고른다
   const pool = tab === "list" ? listed : all;
@@ -343,7 +191,7 @@ export function LunchMap() {
       <NaverPlacePanel name={selected.name} naverPlaceId={selected.naver_place_id} tab={placeTab} onTab={setPlaceTab} onClose={() => setPlaceTab(undefined)} />
     ) : null;
 
-  const rank = selected ? rankPlaces(all, period === "week" && all.every((p) => p.weekly_score === 0) ? "all" : period).findIndex((p) => p.id === selected.id) + 1 : 0;
+  const rank = selected ? ranking(all, period).ranked.findIndex((p) => p.id === selected.id) + 1 : 0;
 
   const panel = (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
@@ -364,18 +212,18 @@ export function LunchMap() {
         </div>
         {mode.kind !== "add" && tab === "walk" && (
           <div className="mt-3 flex items-center gap-2 rounded-2xl bg-surface px-3.5 py-3 text-sm">
-            {draftStops.length === 0 ? (
+            {walk.draftCourse.stops.length === 0 ? (
               <span className="text-muted">🚶 장소를 골라 내 코스를 짜 보세요</span>
             ) : (
               <>
                 <span className="min-w-0 flex-1 truncate font-bold">
-                  내 코스 {draftStops.length}곳 · {draftTime.rough ? "약 " : ""}
-                  {draftTime.totalMinutes}분
+                  내 코스 {walk.draftCourse.stops.length}곳 · {walk.draftCourse.time.rough ? "약 " : ""}
+                  {walk.draftCourse.time.totalMinutes}분
                 </span>
                 <button onClick={() => openCourse(null)} className="shrink-0 rounded-full bg-brand px-3 py-1 text-xs font-black text-brand-ink">
                   보기
                 </button>
-                <button onClick={() => updateDraft([])} className="shrink-0 text-xs font-bold text-muted hover:text-foreground">
+                <button onClick={walk.draft.clear} className="shrink-0 text-xs font-bold text-muted hover:text-foreground">
                   비우기
                 </button>
               </>
@@ -432,29 +280,25 @@ export function LunchMap() {
             onVote={(v) => vote(selected.id, v)}
             onKeywords={(k) => setKeywords(selected.id, k)}
             onBack={() => setMode({ kind: "browse" })}
-            onTipAdded={onTipAdded}
+            onTipAdded={addTip}
             openTab={placeTab}
             onOpenTab={(t) => setPlaceTab(t)}
-            drawTeams={(teams ?? []).filter((t) => t.open_box && !t.open_box.locked)}
+            drawTeams={(teams ?? []).filter((t) => acceptsEntries(t.open_box))}
             onAddToBox={(id) => addToBox(id, selected.id)}
           />
-        ) : mode.kind === "course" ? (
+        ) : openedCourse ? (
           <CourseDetail
-            key={mode.courseId ?? "draft"}
-            name={openedCourse === null ? null : (openedCourse?.name ?? "산책 코스")}
-            summary={openedCourse?.summary ?? null}
-            stops={courseStops}
-            spots={spotMap}
-            time={openedTime}
+            key={mode.kind === "course" ? (mode.courseId ?? "draft") : "draft"}
+            course={openedCourse}
             backLabel={`${TAB_LABEL[tab].split(" ")[1]}으로`}
             onBack={() => setMode({ kind: "browse" })}
             onOpenSpot={openSpot}
-            onMove={openedCourse === null ? moveDraftSpot : undefined}
-            onRemove={openedCourse === null ? toggleDraftSpot : undefined}
+            onMove={openedCourse.id === null ? walk.draft.move : undefined}
+            onRemove={openedCourse.id === null ? walk.draft.toggle : undefined}
             onCopy={
-              openedCourse
+              openedCourse.id !== null
                 ? () => {
-                    updateDraft(courseStops.map((st) => st.spot_id));
+                    walk.draft.replace(openedCourse.stopIds);
                     openCourse(null);
                   }
                 : undefined
@@ -462,38 +306,17 @@ export function LunchMap() {
           />
         ) : mode.kind === "spot" ? (
           openedSpot ? (
-            <SpotDetail
-              key={openedSpot.id}
-              spot={openedSpot}
-              legs={legMap}
-              backLabel={`${TAB_LABEL[tab].split(" ")[1]}으로`}
-              inDraft={draftSet.has(openedSpot.id)}
-              draftFull={draftFull}
-              onToggleDraft={() => toggleDraftSpot(openedSpot.id)}
-              onBack={() => setMode({ kind: "browse" })}
-            />
+            <SpotDetail key={openedSpot.id} spot={openedSpot} walk={walk} backLabel={`${TAB_LABEL[tab].split(" ")[1]}으로`} onBack={() => setMode({ kind: "browse" })} />
           ) : (
             <p className="p-6 text-center text-sm text-muted">산책 장소를 찾을 수 없어요.</p>
           )
         ) : tab === "walk" ? (
-          walkError ? (
-            <p className="p-6 text-center text-sm text-danger">{walkError}</p>
-          ) : !walk ? (
+          walk.status === "error" ? (
+            <p className="p-6 text-center text-sm text-danger">{walk.error}</p>
+          ) : walk.status === "loading" ? (
             <p className="p-6 text-center text-sm text-muted">불러오는 중…</p>
           ) : (
-            <WalkPanel
-              courses={walk.courses}
-              spots={spotMap}
-              spotList={walkSpotList}
-              legs={legMap}
-              draft={draftSet}
-              draftFull={draftFull}
-              maxMinutes={walkMaxMinutes}
-              onMaxMinutes={setWalkMaxMinutes}
-              onOpenCourse={openCourse}
-              onOpenSpot={openSpot}
-              onToggleSpot={toggleDraftSpot}
-            />
+            <WalkPanel walk={walk} onOpenCourse={openCourse} onOpenSpot={openSpot} />
           )
         ) : tab === "rank" ? (
           <RankingList places={all} period={period} onPeriod={setPeriod} onSelect={select} />
@@ -528,10 +351,10 @@ export function LunchMap() {
       <main className="relative h-full flex-1">
         <NaverMap
           places={tab === "walk" ? [] : mapPlaces}
-          spots={tab === "walk" ? walkSpotList : []}
+          spots={tab === "walk" ? walk.spots : []}
           selectedSpotId={mode.kind === "spot" ? mode.id : null}
           onSelectSpot={openSpot}
-          route={tab === "walk" ? mapRoute : null}
+          route={tab === "walk" ? walkRoute : placeRoute}
           selectedId={selectedId}
           onSelect={select}
           pickMode={pickMode}
