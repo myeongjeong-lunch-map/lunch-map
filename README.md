@@ -37,7 +37,7 @@ src/
       cron/walking/          매일 도보 시간 재계산 (Vercel Cron)
       cron/walk-legs/        매일 산책 구간 재계산 (Vercel Cron)
       admin/                 관리자 수정·삭제
-  components/                LunchMap(전체 틀), NaverMap, PlaceList, RankingList, TipFeed, PlaceDetail, AddPlace …
+  components/                LunchMap(전체 틀) + map/ place/ draw/ walk/ admin/ ui/ (기능별 폴더)
   lib/
     domain.ts                용어·타입·키워드 목록·랭킹 계산
     server/                  Supabase, 네이버, TMAP, 쓰기 방어(허니팟·속도 제한), 쿠키

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, loadNickname, saveNickname, type SearchResult } from "@/lib/api";
 import { CATEGORIES, guessCategory, KEYWORDS, MAX_KEYWORDS_PER_PLACE, type Category, type KeywordKey } from "@/lib/domain";
-import { CATEGORY_EMOJI } from "./categoryStyle";
+import { CATEGORY_EMOJI } from "@/components/place/categoryStyle";
 
 type Draft = { name: string; roadAddress: string; lat: number; lng: number; naverCategory: string | null };
 

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
 import { DRAW_ANIMATIONS, DRAW_LIMITS, drawCandidates, drawWeights, MIN_DRAW_PLACES, type DrawAnimation, type DrawBox, type DrawLimit, type DrawResult, type Place, type TeamDetail, type TeamSummary } from "@/lib/domain";
-import { CategoryDot } from "./PlaceList";
-import { DrawShow, type ShowEntry } from "./DrawShow";
+import { CategoryDot } from "@/components/place/PlaceList";
+import { DrawShow, type ShowEntry } from "@/components/draw/DrawShow";
 
 // 추첨 탭: 팀 목록 → 팀 화면(추첨통, 추첨 기록). 팀 화면은 몇 초마다 다시 불러
 // 조장이 추첨(다시 뽑기 포함)을 시작하면 지금 이 탭을 보고 있는 팀원 모두가 같은 연출을 본다.

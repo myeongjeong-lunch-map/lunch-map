@@ -2,7 +2,7 @@
 
 import { Fragment } from "react";
 import { WALK_KIND_EMOJI, formatMeters, naverMapUrl, type CourseTime, type WalkCourseStop, type WalkSpot } from "@/lib/domain";
-import { courseBreakdown } from "./WalkPanel";
+import { courseBreakdown } from "@/components/walk/WalkPanel";
 
 type Props = {
   /** 추천 코스 이름. 내 코스면 null */

@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
 import { KEYWORDS, MAX_KEYWORDS_PER_PLACE, naverMapUrl, timeAgo, type KeywordKey, type MyVote, type Place, type TeamSummary, type Tip } from "@/lib/domain";
 import type { PlaceTab } from "@/lib/naverPlaceId";
-import { CATEGORY_COLOR, CATEGORY_EMOJI } from "./categoryStyle";
-import { CategoryDot, Walking } from "./PlaceList";
+import { CATEGORY_COLOR, CATEGORY_EMOJI } from "@/components/place/categoryStyle";
+import { CategoryDot, Walking } from "@/components/place/PlaceList";
 
 const NAVER_TABS: { key: PlaceTab; label: string }[] = [
   { key: "menu", label: "📋 메뉴판" },

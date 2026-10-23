@@ -1,7 +1,7 @@
 "use client";
 
 import { timeAgo, type Place, type Tip } from "@/lib/domain";
-import { CategoryDot, Walking } from "./PlaceList";
+import { CategoryDot, Walking } from "@/components/place/PlaceList";
 
 // 꿀팁 피드: 모든 가게의 최근 꿀팁. 누르면 그 가게로 간다.
 export function TipFeed({ tips, places, onSelect }: { tips: Tip[] | null; places: Place[]; onSelect: (id: string) => void }) {
