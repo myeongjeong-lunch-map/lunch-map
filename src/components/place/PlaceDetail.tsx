@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
 import { KEYWORDS, MAX_KEYWORDS_PER_PLACE, naverMapUrl, timeAgo, type KeywordKey, type MyVote, type Place, type TeamSummary, type Tip } from "@/lib/domain";
+import { canPutIntoBox } from "@/lib/drawBox";
 import type { PlaceTab } from "@/lib/naverPlaceId";
 import { CATEGORY_COLOR, CATEGORY_EMOJI } from "@/components/place/categoryStyle";
 import { CategoryDot, Walking } from "@/components/place/PlaceList";
@@ -148,7 +149,7 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
               <button
                 key={just ? `${t.id}-${added.at}` : t.id}
                 onClick={() => void addToBox(t)}
-                disabled={!t.open_box?.remaining || adding === t.id}
+                disabled={!canPutIntoBox(t.open_box) || adding === t.id}
                 className={`relative w-full rounded-xl border py-2.5 text-sm font-bold transition-colors ${
                   just ? "lm-pop border-brand bg-brand text-brand-ink" : "border-brand/60 text-brand hover:bg-brand/10"
                 } ${just ? "" : "disabled:opacity-40"}`}

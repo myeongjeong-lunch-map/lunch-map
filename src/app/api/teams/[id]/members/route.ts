@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/server/supabase";
 import { cleanText, ensureVoterId, errorResponse, HttpError, readVoterId } from "@/lib/server/guard";
-import { findOpenBox, getTeam } from "@/lib/server/teams";
+import { leaveTeam } from "@/lib/server/drawBox";
+import { getTeam } from "@/lib/server/teams";
 
 // 팀에 들어오기(이미 팀원이면 닉네임 바꾸기)
 export async function PUT(req: NextRequest, ctx: RouteContext<"/api/teams/[id]/members">) {
@@ -25,15 +26,7 @@ export async function PUT(req: NextRequest, ctx: RouteContext<"/api/teams/[id]/m
 export async function DELETE(req: NextRequest, ctx: RouteContext<"/api/teams/[id]/members">) {
   try {
     const { id } = await ctx.params;
-    const me = readVoterId(req);
-    if (!me) return Response.json({ ok: true });
-    const box = await findOpenBox(id);
-    if (box) {
-      const { error } = await db().from("draw_entries").delete().eq("box_id", box.id).eq("member_id", me);
-      if (error) throw error;
-    }
-    const { error } = await db().from("team_members").delete().eq("team_id", id).eq("member_id", me);
-    if (error) throw error;
+    await leaveTeam(id, readVoterId(req));
     return Response.json({ ok: true });
   } catch (e) {
     return errorResponse(e);
