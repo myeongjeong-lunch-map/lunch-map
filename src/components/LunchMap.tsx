@@ -12,6 +12,7 @@ import { usePlaceList } from "@/lib/usePlaceList";
 import type { PlaceTab } from "@/lib/naverPlaceId";
 import { NaverMap } from "@/components/map/NaverMap";
 import { usePlaceRouteLine, useWalkRouteLine } from "@/components/map/routeLine";
+import { useDicePicks } from "@/components/place/useDicePicks";
 import { PlaceList, applyFilters, isFiltered, DEFAULT_FILTERS, type Filters } from "@/components/place/PlaceList";
 import { RankingList } from "@/components/place/RankingList";
 import { TipFeed } from "@/components/place/TipFeed";
@@ -115,6 +116,7 @@ export function LunchMap() {
   };
 
   const all = useMemo(() => places ?? [], [places]);
+  const dice = useDicePicks(all);
 
   // 산책: 지금 열린 코스(내 코스면 courseId가 null)와 열린 장소. 경로선은 산책 지도 모듈이 계산한 값을 그대로 쓴다
   const openedCourse = useMemo(() => (mode.kind === "course" ? walk.course(mode.courseId) : null), [mode, walk]);
@@ -159,8 +161,8 @@ export function LunchMap() {
   }, []);
   const setPlaceTab = (t: PlaceTab | undefined) => setMode((m) => (m.kind === "detail" ? { ...m, tab: t } : m));
 
-  // 🎲 오늘 뭐 먹지: 목록 탭에서 필터를 걸었으면 그 안에서 고른다
-  const pool = tab === "list" ? listed : all;
+  // 🎲 오늘 뭐 먹지: 후보를 담았으면 그 안에서, 아니면 목록 탭에서 필터를 걸었을 때 그 안에서 고른다
+  const pool = dice.picks.length ? dice.picks : tab === "list" ? listed : all;
   const roll = () => {
     if (!pool.length || rolling) return;
     setRolling(true);
@@ -236,8 +238,34 @@ export function LunchMap() {
             disabled={!pool.length}
             className="mt-3 w-full rounded-2xl bg-brand py-3.5 text-lg font-black text-brand-ink shadow-[0_0_30px_rgba(3,199,90,0.3)] transition active:scale-[0.98] disabled:opacity-40"
           >
-            🎲 {rolling ? "고르는 중…" : tab === "list" && isFiltered(filters) ? `조건 안에서 뭐 먹지? (${listed.length}곳)` : "오늘 뭐 먹지?"}
+            🎲{" "}
+            {rolling
+              ? "고르는 중…"
+              : dice.picks.length
+                ? `후보 ${dice.picks.length}곳 중에 뭐 먹지?`
+                : tab === "list" && isFiltered(filters)
+                  ? `조건 안에서 뭐 먹지? (${listed.length}곳)`
+                  : "오늘 뭐 먹지?"}
           </button>
+        )}
+        {mode.kind !== "add" && tab !== "walk" && dice.picks.length > 0 && (
+          <div className="mt-2 flex items-center gap-2">
+            <div className="no-scrollbar flex min-w-0 flex-1 gap-1.5 overflow-x-auto">
+              {dice.picks.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => dice.toggle(p.id)}
+                  aria-label={`${p.name} 후보에서 빼기`}
+                  className="shrink-0 rounded-full bg-brand/15 px-2.5 py-1 text-xs font-bold text-brand hover:bg-brand/25"
+                >
+                  {p.name} ✕
+                </button>
+              ))}
+            </div>
+            <button onClick={dice.clear} className="shrink-0 text-xs font-bold text-muted hover:text-foreground">
+              비우기
+            </button>
+          </div>
         )}
         {mode.kind === "browse" && (
           <div className="mt-3 grid grid-cols-5 rounded-xl bg-surface p-1 text-xs font-bold">
@@ -285,6 +313,8 @@ export function LunchMap() {
             onOpenTab={(t) => setPlaceTab(t)}
             drawTeams={(teams ?? []).filter((t) => acceptsEntries(t.open_box))}
             onAddToBox={(id) => addToBox(id, selected.id)}
+            dicePicked={dice.has(selected.id)}
+            onDicePick={() => dice.toggle(selected.id)}
           />
         ) : openedCourse ? (
           <CourseDetail
@@ -321,7 +351,7 @@ export function LunchMap() {
         ) : tab === "rank" ? (
           <RankingList places={all} period={period} onPeriod={setPeriod} onSelect={select} />
         ) : tab === "list" ? (
-          <PlaceList places={listed} total={all.length} filters={filters} onFilters={setFilters} onSelect={select} latestTip={latestTip} />
+          <PlaceList places={listed} total={all.length} filters={filters} onFilters={setFilters} onSelect={select} latestTip={latestTip} dicePicks={dice} />
         ) : tab === "tips" ? (
           <TipFeed tips={recentTips} places={all} onSelect={select} />
         ) : (

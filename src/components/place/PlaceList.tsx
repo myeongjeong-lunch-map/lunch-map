@@ -1,6 +1,7 @@
 "use client";
 
 import { CATEGORIES, KEYWORD_LABEL, KEYWORDS, topKeyword, walkingMinutes, type Category, type KeywordKey, type Place } from "@/lib/domain";
+import type { DicePicks } from "@/components/place/useDicePicks";
 import { CATEGORY_COLOR, CATEGORY_EMOJI } from "@/components/place/categoryStyle";
 
 export type Filters = {
@@ -67,9 +68,11 @@ type Props = {
   onFilters: (f: Filters) => void;
   onSelect: (id: string) => void;
   latestTip: Record<string, string>;
+  /** 🎲 후보로 담은 가게 */
+  dicePicks: DicePicks;
 };
 
-export function PlaceList({ places, total, filters, onFilters, onSelect, latestTip }: Props) {
+export function PlaceList({ places, total, filters, onFilters, onSelect, latestTip, dicePicks }: Props) {
   const set = (patch: Partial<Filters>) => onFilters({ ...filters, ...patch });
 
   return (
@@ -115,9 +118,10 @@ export function PlaceList({ places, total, filters, onFilters, onSelect, latestT
         {places.length === 0 && <li className="p-8 text-center text-sm text-muted">{total ? "조건에 맞는 가게가 없어요" : "아직 등록된 가게가 없어요. 첫 맛집을 추가해 보세요!"}</li>}
         {places.map((p) => {
           const top = topKeyword(p);
+          const picked = dicePicks.has(p.id);
           return (
-            <li key={p.id}>
-              <button onClick={() => onSelect(p.id)} className="flex w-full items-start gap-3 border-t border-line/60 px-4 py-3.5 text-left hover:bg-surface">
+            <li key={p.id} className="flex items-stretch border-t border-line/60">
+              <button onClick={() => onSelect(p.id)} className="flex min-w-0 flex-1 items-start gap-3 py-3.5 pl-4 pr-2 text-left hover:bg-surface">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl" style={{ background: `${CATEGORY_COLOR[p.category]}33` }}>
                   {CATEGORY_EMOJI[p.category]}
                 </span>
@@ -137,6 +141,16 @@ export function PlaceList({ places, total, filters, onFilters, onSelect, latestT
                 <span className="shrink-0 text-right text-xs font-bold leading-5 text-muted">
                   👍 {p.likes}
                   <br />💡 {p.tip_count}
+                </span>
+              </button>
+              <button
+                onClick={() => dicePicks.toggle(p.id)}
+                aria-label={picked ? `${p.name} 🎲 후보에서 빼기` : `${p.name} 🎲 후보에 담기`}
+                aria-pressed={picked}
+                className="grid w-12 shrink-0 place-items-center hover:bg-surface"
+              >
+                <span className={`grid h-7 w-7 place-items-center rounded-full text-sm font-black ${picked ? "bg-brand text-brand-ink" : "border border-line text-muted"}`}>
+                  {picked ? "✓" : "+"}
                 </span>
               </button>
             </li>
