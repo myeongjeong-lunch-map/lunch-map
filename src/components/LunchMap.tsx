@@ -4,15 +4,14 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { api } from "@/lib/api";
 import { acceptsEntries } from "@/lib/drawBox";
 import {
-  CAMPUS,
-  formatMeters,
   ranking,
   type RankingPeriod,
   type TeamSummary,
 } from "@/lib/domain";
 import { usePlaceList } from "@/lib/usePlaceList";
 import type { PlaceTab } from "@/lib/naverPlaceId";
-import { NaverMap, type MapRoute } from "@/components/map/NaverMap";
+import { NaverMap } from "@/components/map/NaverMap";
+import { usePlaceRouteLine, useWalkRouteLine } from "@/components/map/routeLine";
 import { PlaceList, applyFilters, isFiltered, DEFAULT_FILTERS, type Filters } from "@/components/place/PlaceList";
 import { RankingList } from "@/components/place/RankingList";
 import { TipFeed } from "@/components/place/TipFeed";
@@ -56,9 +55,6 @@ type Mode =
   | { kind: "spot"; id: string }
   | { kind: "course"; courseId: string | null };
 
-/** 코스·장소 보기에서 불러온 구간별 경로. key는 어느 장소들의 경로인지 (늦게 온 응답을 거르는 데 쓴다). legs가 null이면 불러오지 못한 것 */
-type WalkPathState = { key: string; legs: { path: [number, number][] | null }[] | null };
-
 export function LunchMap() {
   const isDesktop = useIsDesktop();
   const { places, myVotes, myKeywords, recentTips, loadError, reload, vote, setKeywords, addTip } = usePlaceList();
@@ -74,7 +70,6 @@ export function LunchMap() {
   const [teamsError, setTeamsError] = useState<string | null>(null);
   const [teamId, setTeamIdState] = useState<string | null>(null);
   const walk = useWalkMap();
-  const [walkPath, setWalkPath] = useState<WalkPathState | null>(null);
 
   const reloadTeams = useCallback(async () => {
     try {
@@ -121,53 +116,17 @@ export function LunchMap() {
 
   const all = useMemo(() => places ?? [], [places]);
 
-  // 산책: 지금 열린 코스(내 코스면 courseId가 null)와 열린 장소
+  // 산책: 지금 열린 코스(내 코스면 courseId가 null)와 열린 장소. 경로선은 산책 지도 모듈이 계산한 값을 그대로 쓴다
   const openedCourse = useMemo(() => (mode.kind === "course" ? walk.course(mode.courseId) : null), [mode, walk]);
   const openedSpot = mode.kind === "spot" ? (walk.spotMap.get(mode.id) ?? null) : null;
   const routeIds = useMemo(() => (mode.kind === "spot" ? (openedSpot ? [openedSpot.id] : []) : (openedCourse?.stopIds ?? [])), [mode.kind, openedSpot, openedCourse]);
-  const routeKey = routeIds.join(",");
-
-  useEffect(() => {
-    // 코스·장소를 볼 때 구간별 경로를 받는다. 다른 코스로 바뀌면 늦게 온 응답은 버린다
-    if (!routeKey) return;
-    let cancelled = false;
-    api
-      .walkPath(routeKey.split(","))
-      .then((r) => !cancelled && setWalkPath({ key: routeKey, legs: r.legs }))
-      .catch(() => !cancelled && setWalkPath({ key: routeKey, legs: null }));
-    return () => {
-      cancelled = true;
-    };
-  }, [routeKey]);
-
-  const mapRoute = useMemo<MapRoute | null>(() => {
-    if (routeIds.length === 0) return null;
-    const spotsOnRoute = routeIds.map((id) => walk.spotMap.get(id)!);
-    // 아직 받는 중이면 마커와 지도 맞춤만 하고 선은 나중에 그린다
-    if (walkPath?.key !== routeKey) return { stops: spotsOnRoute, path: null, dashed: false, chip: null };
-    const points = [CAMPUS, ...spotsOnRoute, CAMPUS];
-    // 장소 보기는 캠퍼스 → 장소 한 구간만 그린다
-    const legCount = mode.kind === "spot" ? 1 : points.length - 1;
-    const stored = walkPath.legs ?? [];
-    const path: [number, number][] = [];
-    let dashed = false;
-    for (let i = 0; i < legCount; i++) {
-      const from = points[i];
-      const to = points[i + 1];
-      const p = stored[i]?.path ?? null;
-      if (!p) dashed = true;
-      path.push([from.lng, from.lat], ...(p ?? []), [to.lng, to.lat]);
-    }
-    let chip: string | null;
-    if (mode.kind === "spot") {
-      const l = walk.campusLeg(routeIds[0]);
-      chip = l ? `${formatMeters(l.meters)} · 걸어서 ${l.source === "tmap" ? "" : "약 "}${Math.max(1, Math.round(l.seconds / 60))}분` : null;
-    } else {
-      const openedTime = openedCourse!.time;
-      chip = `${formatMeters(openedTime.meters)} · ${openedTime.rough ? "약 " : ""}${openedTime.totalMinutes}분`;
-    }
-    return { stops: spotsOnRoute, path, dashed, chip };
-  }, [routeIds, routeKey, walkPath, mode.kind, walk, openedCourse]);
+  const walkRoute = useWalkRouteLine({
+    stopIds: routeIds,
+    spots: walk.spotMap,
+    time: openedCourse?.time ?? null,
+    leg: openedSpot ? walk.campusLeg(openedSpot.id) : undefined,
+    oneWay: mode.kind === "spot",
+  });
 
   const raiseSheet = () => setSnap((s) => (s === "peek" ? "half" : s));
   const openSpot = (id: string) => {
@@ -188,6 +147,7 @@ export function LunchMap() {
   const selected = selectedId ? all.find((p) => p.id === selectedId) ?? null : null;
   const placeTab = mode.kind === "detail" ? mode.tab : undefined;
   const mapPlaces = tab === "list" ? listed : all;
+  const placeRoute = usePlaceRouteLine(selected);
 
   const select = useCallback((id: string | null) => {
     if (id) {
@@ -394,7 +354,7 @@ export function LunchMap() {
           spots={tab === "walk" ? walk.spots : []}
           selectedSpotId={mode.kind === "spot" ? mode.id : null}
           onSelectSpot={openSpot}
-          route={tab === "walk" ? mapRoute : null}
+          route={tab === "walk" ? walkRoute : placeRoute}
           selectedId={selectedId}
           onSelect={select}
           pickMode={pickMode}

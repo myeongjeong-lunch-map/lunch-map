@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
-import { CAMPUS, WALK_KIND_EMOJI, walkingMinutes, type Place, type WalkSpot } from "@/lib/domain";
+import { CAMPUS, WALK_KIND_EMOJI, type Place, type WalkSpot } from "@/lib/domain";
 import { CATEGORY_EMOJI } from "@/components/place/categoryStyle";
+import type { RouteLine } from "@/components/map/routeLine";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- 네이버 지도 JS SDK는 타입 정의를 제공하지 않는다 */
 declare global {
@@ -42,12 +42,6 @@ function cumulative(path: LngLat[]): number[] {
   const cum = [0];
   for (let i = 1; i < path.length; i++) cum.push(cum[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
   return cum;
-}
-
-function routeChip(place: Place): string | null {
-  const minutes = walkingMinutes(place);
-  if (minutes == null || place.walking_meters == null) return null;
-  return `${(place.walking_meters / 1000).toFixed(1)}km · 도보 예상 ${minutes}분`;
 }
 
 /** 경로를 그리는 애니메이션과 가운데 칩. 지우는 함수를 돌려준다 */
@@ -116,16 +110,14 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-/** 코스·장소 보기에서 그릴 경로. path가 null이면 선은 아직 없다(불러오는 중). stops에 캠퍼스는 넣지 않는다 */
-export type MapRoute = { stops: { lat: number; lng: number }[]; path: [number, number][] | null; dashed: boolean; chip: string | null };
-
 type Props = {
   places: Place[];
   /** 산책 탭에서 지도에 찍는 산책 장소 */
   spots: WalkSpot[];
   selectedSpotId: string | null;
   onSelectSpot: (id: string) => void;
-  route: MapRoute | null;
+  /** 지도에 그릴 경로(가게 또는 산책). 만드는 일은 routeLine 모듈이 하고 여기서는 그리기만 한다 */
+  route: RouteLine | null;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   /** 가게 추가 시 핀 직접 꽂기 모드 */
@@ -227,39 +219,6 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
     }
   }, [places, selectedId, ready]);
 
-  // 선택한 가게: 캠퍼스와 가게가 함께 보이게 맞추고, 보행 경로를 그리며 거리·시간 칩을 띄운다.
-  // 저장된 경로가 없으면(추정값, 아직 계산 전) 직선 점선으로 대신한다.
-  useEffect(() => {
-    const naver = window.naver;
-    if (!ready || !naver?.maps || !map.current || !selectedId) return;
-    const p = places.find((x) => x.id === selectedId);
-    if (!p) return;
-    const m = map.current;
-    const campus = new naver.maps.LatLng(CAMPUS.lat, CAMPUS.lng);
-    const target = new naver.maps.LatLng(p.lat, p.lng);
-    // 모바일 시트에 가리지 않게 아래 여백을 시트 높이만큼 더 준다
-    m.fitBounds(new naver.maps.LatLngBounds(campus, campus).extend(target), { top: 80, right: 60, bottom: 80 + bottomInset, left: 60 });
-    if (m.getZoom() > LABEL_ZOOM) m.setZoom(LABEL_ZOOM);
-
-    let cancelled = false;
-    let clear: (() => void) | null = null;
-    api
-      .placePath(p.id)
-      .then((r) => r.path)
-      .catch(() => null)
-      .then((stored) => {
-        if (cancelled) return;
-        const path: LngLat[] = [[CAMPUS.lng, CAMPUS.lat], ...(stored ?? []), [p.lng, p.lat]];
-        clear = drawRoute(naver, m, path, { dashed: !stored, chip: routeChip(p) });
-      });
-    return () => {
-      cancelled = true;
-      clear?.();
-    };
-    // places가 바뀔 때마다 다시 그리지 않도록 선택이 바뀔 때만 실행한다
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, ready]);
-
   // 산책 장소 마커. 지금 보는 코스 안의 장소는 이모지 자리에 순서 번호를 단다
   useEffect(() => {
     const naver = window.naver;
@@ -306,7 +265,7 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
     map.current.fitBounds(bounds, { top: 80, right: 60, bottom: 80 + handlers.current.bottomInset, left: 60 });
   }, [spots, hasRoute, ready]);
 
-  // 산책 코스·장소 보기: 경로 전체가 보이게 맞추고, 초록 경로를 그린다
+  // 경로(가게·산책 코스·산책 장소): 경로 전체가 보이게 맞추고, 초록 경로와 칩을 그린다
   useEffect(() => {
     const naver = window.naver;
     if (!ready || !naver?.maps || !map.current || !route) return;
