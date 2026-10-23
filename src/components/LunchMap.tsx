@@ -3,17 +3,18 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { api } from "@/lib/api";
 import { acceptsEntries } from "@/lib/drawBox";
-import { ranking, type RankingPeriod, type TeamSummary } from "@/lib/domain";
+import { ranking, type LunchCourse, type RankingPeriod, type TeamSummary } from "@/lib/domain";
 import { usePlaceList } from "@/lib/usePlaceList";
 import type { PlaceTab } from "@/lib/naverPlaceId";
 import { NaverMap } from "@/components/map/NaverMap";
-import { usePlaceRouteLine, useWalkRouteLine } from "@/components/map/routeLine";
+import { useLunchRouteLine, usePlaceRouteLine, useWalkRouteLine } from "@/components/map/routeLine";
 import { useDicePicks } from "@/components/place/useDicePicks";
 import { PlaceList, applyFilters, isFiltered, DEFAULT_FILTERS, type Filters } from "@/components/place/PlaceList";
 import { RankingList } from "@/components/place/RankingList";
 import { TipFeed } from "@/components/place/TipFeed";
 import { WalkPanel } from "@/components/walk/WalkPanel";
 import { CourseDetail } from "@/components/walk/CourseDetail";
+import { LunchCourseDetail } from "@/components/walk/LunchCourseDetail";
 import { SpotDetail } from "@/components/walk/SpotDetail";
 import { useWalkMap } from "@/components/walk/useWalkMap";
 import { PlaceDetail } from "@/components/place/PlaceDetail";
@@ -46,13 +47,14 @@ const TAB_LABEL: Record<Tab, string> = { rank: "🏆 랭킹", list: "📍 목록
 const TEAM_KEY = "lm_team";
 
 // detail.tab: 네이버 플레이스(메뉴·사진·리뷰) 패널이 열려 있으면 그 탭
-// spot: 산책 장소 보기, course: 산책 코스 보기 (courseId가 null이면 내 코스)
+// spot: 산책 장소 보기, course: 산책 코스 보기 (courseId가 null이면 내 코스), lunch: 점심 코스 보기
 type Mode =
   | { kind: "browse" }
   | { kind: "detail"; id: string; tab?: PlaceTab }
   | { kind: "add" }
   | { kind: "spot"; id: string }
-  | { kind: "course"; courseId: string | null };
+  | { kind: "course"; courseId: string | null }
+  | { kind: "lunch"; course: LunchCourse };
 
 export function LunchMap() {
   const isDesktop = useIsDesktop();
@@ -143,9 +145,17 @@ export function LunchMap() {
     oneWay: mode.kind === "spot",
   });
 
+  // 점심 코스는 산책 탭뿐 아니라 가게 카드·추첨 결과에서도 열리므로 탭과 상관없이 가게와 산책 장소 마커, 세 구간 경로선을 그린다
+  const openedLunch = mode.kind === "lunch" ? mode.course : null;
+  const lunchRoute = useLunchRouteLine(openedLunch);
+
   const raiseSheet = () => setSnap((s) => (s === "peek" ? "half" : s));
   const openSpot = (id: string) => {
     setMode({ kind: "spot", id });
+    raiseSheet();
+  };
+  const openLunch = (course: LunchCourse) => {
+    setMode({ kind: "lunch", course });
     raiseSheet();
   };
   const openCourse = (courseId: string | null) => {
@@ -366,8 +376,22 @@ export function LunchMap() {
               dicePicked={dice.has(selected.id)}
               onDicePick={() => dice.toggle(selected.id)}
               halloween={halloween}
+              walk={walk}
+              onOpenLunch={openLunch}
             />
           </>
+        ) : openedLunch ? (
+          <LunchCourseDetail
+            key={`${openedLunch.mode}|${openedLunch.place.id}|${openedLunch.spot.id}`}
+            course={openedLunch}
+            backLabel={`${TAB_LABEL[tab].split(" ")[1]}으로`}
+            onBack={() => setMode({ kind: "browse" })}
+            onOpenPlace={select}
+            onOpenSpot={(id) => {
+              setTab("walk");
+              openSpot(id);
+            }}
+          />
         ) : openedCourse ? (
           <CourseDetail
             key={mode.kind === "course" ? (mode.courseId ?? "draft") : "draft"}
@@ -404,7 +428,7 @@ export function LunchMap() {
           ) : walk.status === "loading" ? (
             <p className="p-6 text-center text-sm text-muted">불러오는 중…</p>
           ) : (
-            <WalkPanel walk={walk} onOpenCourse={openCourse} onOpenSpot={openSpot} />
+            <WalkPanel walk={walk} places={all} onOpenCourse={openCourse} onOpenSpot={openSpot} onOpenLunch={openLunch} />
           )
         ) : tab === "rank" ? (
           <RankingList places={all} period={period} onPeriod={setPeriod} onSelect={select} halloween={halloween} />
@@ -424,6 +448,8 @@ export function LunchMap() {
               select(id);
               setSnap("full");
             }}
+            walk={walk}
+            onOpenLunch={openLunch}
           />
         )}
       </div>
@@ -438,11 +464,11 @@ export function LunchMap() {
       {!isDesktop && naverPanel && <div className="fixed inset-0 z-[1000] bg-background pt-[env(safe-area-inset-top)]">{naverPanel}</div>}
       <main className="relative h-full flex-1">
         <NaverMap
-          places={tab === "walk" ? [] : mapPlaces}
-          spots={tab === "walk" ? walk.spots : []}
+          places={openedLunch ? [openedLunch.place] : tab === "walk" ? [] : mapPlaces}
+          spots={openedLunch ? [openedLunch.spot] : tab === "walk" ? walk.spots : []}
           selectedSpotId={mode.kind === "spot" ? mode.id : null}
           onSelectSpot={openSpot}
-          route={tab === "walk" ? walkRoute : placeRoute}
+          route={openedLunch ? lunchRoute : tab === "walk" ? walkRoute : placeRoute}
           selectedId={selectedId}
           halloween={halloween}
           onSelect={select}

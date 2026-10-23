@@ -1,65 +1,103 @@
 "use client";
 
-import { LUNCH_TIGHT_MINUTES, MAX_COURSE_STOPS, WALK_KIND_EMOJI, formatMeters, type CourseTime } from "@/lib/domain";
+import { LUNCH_MODES, MAX_COURSE_STOPS, WALK_KIND_EMOJI, formatMeters, type CourseTime, type LunchCourse, type Place } from "@/lib/domain";
 import { Chip } from "@/components/place/PlaceList";
-import type { WalkMap } from "@/components/walk/useWalkMap";
+import { LunchCourseList } from "@/components/walk/LunchCourseList";
+import { useLunchCourses } from "@/components/walk/useLunchCourses";
+import type { CourseView, WalkMap } from "@/components/walk/useWalkMap";
 
 type Props = {
   walk: WalkMap;
+  places: Place[];
   onOpenCourse: (courseId: string) => void;
   onOpenSpot: (spotId: string) => void;
+  onOpenLunch: (course: LunchCourse) => void;
 };
+
+/** 산책 장소 하나에 먼저 보이는 점심 코스 수 */
+const LUNCH_PER_SPOT = 3;
 
 /** "걷기 20분 + 둘러보기 10분 · 1.3km" */
 export function courseBreakdown(ct: CourseTime): string {
   return `걷기 ${Math.round(ct.walkSeconds / 60)}분 + 둘러보기 ${ct.stayMinutes}분 · ${formatMeters(ct.meters)}`;
 }
 
-export function WalkPanel({ walk, onOpenCourse, onOpenSpot }: Props) {
-  const { draft, maxMinutes, setMaxMinutes: onMaxMinutes } = walk;
-  const shown = walk.visibleCourses;
-  const cardCount = walk.recommended.length;
+function RecommendedCard({ course, onOpen }: { course: CourseView; onOpen: (courseId: string) => void }) {
+  const { stops, time } = course;
+  return (
+    <li>
+      <button onClick={() => onOpen(course.id!)} className="w-full rounded-2xl border border-line p-4 text-left hover:bg-surface">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="font-bold">{course.name}</span>
+          <b className="shrink-0 text-lg font-black text-brand">약 {time.totalMinutes}분</b>
+        </span>
+        <span className="mt-1 block text-[13px] text-foreground/80">🏫 → {stops.map(({ spot }) => `${WALK_KIND_EMOJI[spot.kind]} ${spot.name}`).join(" → ")} → 🏫</span>
+        <span className="mt-0.5 block text-xs text-muted">{courseBreakdown(time)}</span>
+        {course.summary && <span className="mt-1 block text-[13px] text-muted">{course.summary}</span>}
+        {time.rough && <span className="mt-1 block text-[11px] text-muted/80">일부 구간은 어림값이에요</span>}
+      </button>
+    </li>
+  );
+}
+
+export function WalkPanel({ walk, places, onOpenCourse, onOpenSpot, onOpenLunch }: Props) {
+  const { draft, lunchMode } = walk;
+  const { courses: lunch, basis } = useLunchCourses(walk, places, lunchMode);
+  const lunchBySpot = walk.spots.flatMap((sp) => {
+    const list = lunch.filter((c) => c.spot.id === sp.id);
+    return list.length ? [{ spot: sp, list }] : [];
+  });
 
   return (
     <div className="pb-6">
-      <div className="no-scrollbar flex gap-1.5 overflow-x-auto px-4 pb-2 pt-1">
-        {([30, 45] as const).map((m) => (
-          <Chip key={m} on={maxMinutes === m} onClick={() => onMaxMinutes(maxMinutes === m ? null : m)}>
-            ⏱ {m}분 이내
+      <div className="flex items-baseline gap-2 px-5 pb-2 pt-2">
+        <h2 className="text-sm font-black">🍱 점심 코스</h2>
+        <span className="text-xs text-muted">{basis}</span>
+      </div>
+      <div className="no-scrollbar flex gap-1.5 overflow-x-auto px-4 pb-2">
+        {LUNCH_MODES.map((m) => (
+          <Chip key={m.key} on={lunchMode === m.key} onClick={() => walk.setLunchMode(m.key)}>
+            {m.label}
           </Chip>
         ))}
       </div>
+      {lunchBySpot.length === 0 ? (
+        <p className="mx-4 rounded-2xl bg-surface p-5 text-center text-sm text-muted">점심시간 안에 다녀올 수 있는 점심 코스가 없어요</p>
+      ) : (
+        <div className="space-y-3 px-4">
+          {lunchBySpot.map(({ spot, list }) => (
+            <section key={spot.id}>
+              <h3 className="pb-1.5 text-[13px] font-black">
+                {WALK_KIND_EMOJI[spot.kind]} {spot.name}
+              </h3>
+              <LunchCourseList courses={list} limit={LUNCH_PER_SPOT} onOpen={onOpenLunch} />
+            </section>
+          ))}
+        </div>
+      )}
 
-      <h2 className="px-5 pb-2 pt-2 text-sm font-black">추천 코스</h2>
-      <ul className="space-y-2 px-4">
-        {shown.length === 0 && (
-          <li className="rounded-2xl bg-surface p-6 text-center text-sm text-muted">
-            {cardCount === 0 ? "아직 등록된 산책 코스가 없어요" : `${maxMinutes}분 안에 다녀올 수 있는 코스가 없어요`}
-          </li>
-        )}
-        {shown.map((course) => {
-          const { stops, time } = course;
-          return (
-          <li key={course.id}>
-            <button onClick={() => onOpenCourse(course.id!)} className="w-full rounded-2xl border border-line p-4 text-left hover:bg-surface">
-              <span className="flex items-baseline justify-between gap-2">
-                <span className="font-bold">{course.name}</span>
-                <span className="shrink-0 text-right">
-                  {time.totalMinutes > LUNCH_TIGHT_MINUTES && <span className="mr-1.5 text-[11px] font-bold text-muted">점심시간엔 빠듯</span>}
-                  <b className="text-lg font-black text-brand">약 {time.totalMinutes}분</b>
-                </span>
-              </span>
-              <span className="mt-1 block text-[13px] text-foreground/80">
-                🏫 → {stops.map(({ spot }) => `${WALK_KIND_EMOJI[spot.kind]} ${spot.name}`).join(" → ")} → 🏫
-              </span>
-              <span className="mt-0.5 block text-xs text-muted">{courseBreakdown(time)}</span>
-              {course.summary && <span className="mt-1 block text-[13px] text-muted">{course.summary}</span>}
-              {time.rough && <span className="mt-1 block text-[11px] text-muted/80">일부 구간은 어림값이에요</span>}
-            </button>
-          </li>
-          );
-        })}
-      </ul>
+      <h2 className="px-5 pb-2 pt-6 text-sm font-black">추천 코스</h2>
+      {walk.recommended.length === 0 && <p className="mx-4 rounded-2xl bg-surface p-6 text-center text-sm text-muted">아직 등록된 산책 코스가 없어요</p>}
+      {walk.inLunchHour.length > 0 && (
+        <>
+          <h3 className="px-5 pb-1.5 text-[13px] font-black text-muted">점심시간에 다녀오기</h3>
+          <ul className="space-y-2 px-4">
+            {walk.inLunchHour.map((c) => (
+              <RecommendedCard key={c.id} course={c} onOpen={onOpenCourse} />
+            ))}
+          </ul>
+        </>
+      )}
+      {walk.relaxed.length > 0 && (
+        <>
+          <h3 className="px-5 pb-1.5 pt-4 text-[13px] font-black text-muted">여유 있는 날</h3>
+          <ul className="space-y-2 px-4">
+            {walk.relaxed.map((c) => (
+              <RecommendedCard key={c.id} course={c} onOpen={onOpenCourse} />
+            ))}
+          </ul>
+        </>
+      )}
 
       <h2 className="px-5 pb-1 pt-5 text-sm font-black">직접 짜기</h2>
       <p className="px-5 pb-2 text-xs text-muted">지도나 아래 목록에서 장소를 골라 내 코스를 만들어요 (최대 {MAX_COURSE_STOPS}곳{draft.full ? " · 다 찼어요" : ""})</p>
