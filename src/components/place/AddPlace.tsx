@@ -13,6 +13,12 @@ type Props = {
   onCancel: () => void;
   onDone: (id: string) => void;
   onOpenExisting: (id: string) => void;
+  /** 검색 결과가 바뀌면 알린다. 지도에 번호 핀으로 찍는다 */
+  onResults: (results: SearchResult[] | null) => void;
+  /** 고른 검색 결과의 번호(0부터). 고르지 않았거나 직접 고른 위치면 null */
+  onChosen: (index: number | null) => void;
+  /** 지도에서 번호 핀을 누른 것. n은 같은 핀을 다시 눌러도 알 수 있게 늘어나는 값 */
+  mapChoice: { index: number; n: number } | null;
 };
 
 const field = "w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm outline-none placeholder:text-muted focus:border-brand";
@@ -31,7 +37,7 @@ function Pill({ on, onClick, disabled, children }: { on: boolean; onClick: () =>
 }
 
 // 가게 추가: 네이버 장소 검색이 기본, 검색에 없으면 지도에 핀을 직접 꽂는다.
-export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting }: Props) {
+export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting, onResults, onChosen, mapChoice }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -53,6 +59,7 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setManual(true);
+    onChosen(null);
     setDraft((d) => ({ name: d?.name ?? "", roadAddress: "주소 찾는 중…", lat: picked.lat, lng: picked.lng, naverCategory: null }));
     api
       .reverse(picked.lat, picked.lng)
@@ -63,6 +70,8 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
     return () => {
       cancelled = true;
     };
+    // onChosen은 부모가 매번 새로 만드는 함수라 의존성에서 뺀다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picked]);
 
   const search = async (e: React.FormEvent) => {
@@ -71,7 +80,9 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
     setSearching(true);
     setError(null);
     try {
-      setResults((await api.search(query)).results);
+      const found = (await api.search(query)).results;
+      setResults(found);
+      onResults(found);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -79,12 +90,21 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
     }
   };
 
-  const choose = (r: SearchResult) => {
+  const choose = (r: SearchResult, index: number) => {
     setDraft({ name: r.name, roadAddress: r.roadAddress, lat: r.lat, lng: r.lng, naverCategory: r.naverCategory });
     setCategory(guessCategory(r.naverCategory));
     setManual(false);
     setDuplicateId(null);
+    onChosen(index);
   };
+
+  // 지도에서 번호 핀을 누르면 그 결과를 고른 것과 같다
+  useEffect(() => {
+    const r = mapChoice && results?.[mapChoice.index];
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (r) choose(r, mapChoice.index);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapChoice]);
 
   const toggleKeyword = (k: KeywordKey) =>
     setKeywords((ks) => (ks.includes(k) ? ks.filter((x) => x !== k) : ks.length < MAX_KEYWORDS_PER_PLACE ? [...ks, k] : ks));
@@ -127,12 +147,17 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
           {results && (
             <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
               {results.length === 0 && <li className="p-4 text-sm text-muted">검색 결과가 없어요.</li>}
-              {results.map((r) => (
+              {results.map((r, i) => (
                 <li key={`${r.name}-${r.roadAddress}`}>
-                  <button onClick={() => choose(r)} className="w-full px-3 py-3 text-left hover:bg-surface">
-                    <span className="block text-sm font-bold">{r.name}</span>
-                    <span className="block text-xs text-muted">
-                      {r.naverCategory} · {r.roadAddress}
+                  <button onClick={() => choose(r, i)} className="flex w-full gap-2.5 px-3 py-3 text-left hover:bg-surface">
+                    <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-foreground text-[11px] font-black text-background">
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold">{r.name}</span>
+                      <span className="block text-xs text-muted">
+                        {r.naverCategory} · {r.roadAddress}
+                      </span>
                     </span>
                   </button>
                 </li>
@@ -151,7 +176,14 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
           <div className="rounded-xl bg-surface p-3">
             {manual ? (
               <div className="space-y-2">
-                <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} maxLength={60} placeholder="가게 이름" className={field} required />
+                <input
+                  value={draft.name}
+                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                  maxLength={60}
+                  placeholder="가게 이름"
+                  className={field}
+                  required
+                />
                 <input
                   value={draft.roadAddress}
                   onChange={(e) => setDraft({ ...draft, roadAddress: e.target.value })}
@@ -177,6 +209,7 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
                 setManual(false);
                 setDuplicateId(null);
                 setError(null);
+                onChosen(null);
               }}
               className="mt-2 block text-xs font-bold text-muted underline"
             >
@@ -204,7 +237,12 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
             </legend>
             <div className="flex flex-wrap gap-1.5">
               {KEYWORDS.map((k) => (
-                <Pill key={k.key} on={keywords.includes(k.key)} disabled={!keywords.includes(k.key) && keywords.length >= MAX_KEYWORDS_PER_PLACE} onClick={() => toggleKeyword(k.key)}>
+                <Pill
+                  key={k.key}
+                  on={keywords.includes(k.key)}
+                  disabled={!keywords.includes(k.key) && keywords.length >= MAX_KEYWORDS_PER_PLACE}
+                  onClick={() => toggleKeyword(k.key)}
+                >
                   {k.label}
                 </Pill>
               ))}
@@ -215,13 +253,29 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
             <label className="mb-2 block text-sm font-black" htmlFor="first-tip">
               첫 꿀팁 <span className="font-normal text-muted">(선택)</span>
             </label>
-            <textarea id="first-tip" value={tip} onChange={(e) => setTip(e.target.value)} maxLength={1000} rows={3} placeholder="추천 메뉴, 가격, 가는 길…" className={`${field} resize-none`} />
+            <textarea
+              id="first-tip"
+              value={tip}
+              onChange={(e) => setTip(e.target.value)}
+              maxLength={1000}
+              rows={3}
+              placeholder="추천 메뉴, 가격, 가는 길…"
+              className={`${field} resize-none`}
+            />
           </div>
           <div>
             <label className="mb-2 block text-sm font-black" htmlFor="naver-link">
               네이버 지도 공유 링크 <span className="font-normal text-muted">(선택)</span>
             </label>
-            <input id="naver-link" value={naverLink} onChange={(e) => setNaverLink(e.target.value)} maxLength={500} inputMode="url" placeholder="https://naver.me/..." className={field} />
+            <input
+              id="naver-link"
+              value={naverLink}
+              onChange={(e) => setNaverLink(e.target.value)}
+              maxLength={500}
+              inputMode="url"
+              placeholder="https://naver.me/..."
+              className={field}
+            />
             <p className="mt-1 text-xs text-muted">네이버 지도 앱에서 가게 → 공유 → 링크 복사. 넣으면 메뉴판·사진을 바로 볼 수 있어요.</p>
           </div>
           <input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={20} placeholder="닉네임 (선택)" className={field} />

@@ -169,12 +169,12 @@ body {
   z-index: 20;
 }
 
-/* 멀리서 볼 때: 이름표를 숨기고 아이콘만 (선택한 가게와 캠퍼스는 항상 이름 표시) */
-.lm-compact .lm-marker:not(.selected):not(.campus):not(.pick):not(.spot) {
+/* 멀리서 볼 때: 이름표를 숨기고 아이콘만 (선택한 가게, 캠퍼스, 가게 추가의 번호 핀은 항상 이름 표시) */
+.lm-compact .lm-marker:not(.selected):not(.campus):not(.pick):not(.spot):not(.candidate) {
   padding: 3px;
   gap: 0;
 }
-.lm-compact .lm-marker:not(.selected):not(.campus):not(.pick):not(.spot) .label {
+.lm-compact .lm-marker:not(.selected):not(.campus):not(.pick):not(.spot):not(.candidate) .label {
   display: none;
 }
 
@@ -297,4 +297,21 @@ body {
 .lm-marker.ghost.selected {
   animation: none;
   opacity: 1;
+}
+
+/* 가게 추가: 장소 검색 결과 번호 핀. 그동안 등록된 가게 핀은 흐리게 */
+.lm-marker.candidate {
+  border-color: var(--foreground);
+}
+.lm-marker.candidate .emoji.num {
+  background: var(--foreground);
+  color: var(--background);
+  font-weight: 900;
+}
+.lm-marker.candidate.selected .emoji.num {
+  background: #fff;
+  color: var(--brand-ink);
+}
+.lm-dim-places .lm-marker:not(.candidate):not(.campus):not(.pick) {
+  opacity: 0.35;
 }

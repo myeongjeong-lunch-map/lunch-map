@@ -111,6 +111,11 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
+/** 장소 검색 결과 번호 핀 (①~⑤) */
+function candidateIcon(name: string, index: number, chosen: boolean): string {
+  return `<div class="lm-marker candidate${chosen ? " selected" : ""}"><span class="emoji num">${index + 1}</span><span class="label">${escapeHtml(name)}</span></div>`;
+}
+
 type Props = {
   places: Place[];
   /** 산책 탭에서 지도에 찍는 산책 장소 */
@@ -129,9 +134,14 @@ type Props = {
   onPick: (p: { lat: number; lng: number }) => void;
   /** 선택한 가게로 이동할 때 화면 아래쪽을 가리는 높이(px). 모바일 시트용 */
   bottomInset: number;
+  /** 가게 추가: 장소 검색 결과. 번호 핀 ①~⑤로 찍고, 그동안 등록된 가게 핀은 흐리게 한다 */
+  candidates?: { name: string; lat: number; lng: number }[] | null;
+  /** 고른 검색 결과 번호(0부터) */
+  chosenCandidate?: number | null;
+  onPickCandidate?: (index: number) => void;
 };
 
-export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, selectedId, halloween = false, onSelect, pickMode, picked, onPick, bottomInset }: Props) {
+export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, selectedId, halloween = false, onSelect, pickMode, picked, onPick, bottomInset, candidates = null, chosenCandidate = null, onPickCandidate }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
@@ -139,10 +149,11 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const spotMarkers = useRef<Map<string, any>>(new Map());
-  const handlers = useRef({ onSelect, onSelectSpot, onPick, pickMode, bottomInset });
+  const candidateMarkers = useRef<any[]>([]);
+  const handlers = useRef({ onSelect, onSelectSpot, onPick, pickMode, bottomInset, onPickCandidate });
 
   useEffect(() => {
-    handlers.current = { onSelect, onSelectSpot, onPick, pickMode, bottomInset };
+    handlers.current = { onSelect, onSelectSpot, onPick, pickMode, bottomInset, onPickCandidate };
   });
 
   useEffect(() => {
@@ -285,6 +296,51 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
     return drawRoute(naver, m, route.path, { dashed: route.dashed, chip: route.chip });
   }, [route, ready]);
 
+  // 장소 검색 결과 번호 핀
+  useEffect(() => {
+    const naver = window.naver;
+    if (!ready || !naver?.maps || !map.current) return;
+    for (const mk of candidateMarkers.current) mk.setMap(null);
+    candidateMarkers.current = [];
+    if (!candidates?.length) return;
+    candidates.forEach((c, i) => {
+      const pos = new naver.maps.LatLng(c.lat, c.lng);
+      const mk = new naver.maps.Marker({
+        map: map.current,
+        position: pos,
+        icon: { content: candidateIcon(c.name, i, false) },
+        zIndex: 150,
+      });
+      naver.maps.Event.addListener(mk, "click", () => handlers.current.onPickCandidate?.(i));
+      candidateMarkers.current.push(mk);
+    });
+  }, [candidates, ready]);
+
+  // 번호 핀이 모두 보이게 지도를 맞춘다. 모바일 시트 높이가 바뀌어도 다시 맞춘다 (고른 뒤에는 고른 핀으로 옮긴다)
+  useEffect(() => {
+    const naver = window.naver;
+    if (!ready || !naver?.maps || !map.current || !candidates?.length || chosenCandidate != null) return;
+    const m = map.current;
+    const bounds = new naver.maps.LatLngBounds();
+    for (const c of candidates) bounds.extend(new naver.maps.LatLng(c.lat, c.lng));
+    m.fitBounds(bounds, { top: 60, right: 50, bottom: 40 + bottomInset, left: 50 });
+    if (m.getZoom() > LABEL_ZOOM) m.setZoom(LABEL_ZOOM);
+  }, [candidates, chosenCandidate, bottomInset, ready]);
+
+  // 고른 번호 핀을 강조하고 그 자리로 옮긴다
+  useEffect(() => {
+    const naver = window.naver;
+    if (!ready || !naver?.maps || !map.current || !candidates) return;
+    candidateMarkers.current.forEach((mk, i) => {
+      mk.setIcon({ content: candidateIcon(candidates[i].name, i, i === chosenCandidate) });
+      mk.setZIndex(i === chosenCandidate ? 300 : 150);
+    });
+    if (chosenCandidate != null && candidates[chosenCandidate]) {
+      const c = candidates[chosenCandidate];
+      map.current.panTo(new naver.maps.LatLng(c.lat, c.lng));
+    }
+  }, [chosenCandidate, candidates, ready]);
+
   // 핀 직접 꽂기 마커
   useEffect(() => {
     const naver = window.naver;
@@ -309,7 +365,7 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
 
   return (
     <div className="absolute inset-0">
-      <div ref={el} className={`h-full w-full ${pickMode ? "cursor-crosshair" : ""}`} />
+      <div ref={el} className={`h-full w-full ${pickMode ? "cursor-crosshair" : ""} ${candidates?.length ? "lm-dim-places" : ""}`} />
       {error && <div className="absolute inset-0 grid place-items-center bg-surface p-6 text-center text-sm text-muted">{error}</div>}
       {pickMode && (
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow">

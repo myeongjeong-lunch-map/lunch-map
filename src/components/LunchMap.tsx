@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { api } from "@/lib/api";
+import { api, type SearchResult } from "@/lib/api";
 import { acceptsEntries } from "@/lib/drawBox";
 import { ranking, type LunchCourse, type RankingPeriod, type TeamSummary } from "@/lib/domain";
 import { usePlaceList } from "@/lib/usePlaceList";
@@ -66,6 +66,10 @@ export function LunchMap() {
   const [mode, setMode] = useState<Mode>({ kind: "browse" });
   const [pickMode, setPickMode] = useState(false);
   const [picked, setPicked] = useState<{ lat: number; lng: number } | null>(null);
+  // 가게 추가: 장소 검색 결과(지도에 번호 핀), 고른 번호, 지도에서 누른 번호 핀
+  const [candidates, setCandidates] = useState<SearchResult[] | null>(null);
+  const [chosenCandidate, setChosenCandidate] = useState<number | null>(null);
+  const [mapChoice, setMapChoice] = useState<{ index: number; n: number } | null>(null);
   const [snap, setSnap] = useState<SheetSnap>("half");
   const [rolling, setRolling] = useState(false);
   // 할로윈 Trick or Treat: 마지막으로 뽑은 가게와 그때 나온 트릭(없으면 트릿)
@@ -212,6 +216,9 @@ export function LunchMap() {
   const endAdd = (newId?: string) => {
     setPickMode(false);
     setPicked(null);
+    setCandidates(null);
+    setChosenCandidate(null);
+    setMapChoice(null);
     if (newId) void reload().then(() => select(newId));
     else setMode({ kind: "browse" });
   };
@@ -350,6 +357,17 @@ export function LunchMap() {
               endAdd();
               select(id);
             }}
+            onResults={(r) => {
+              setCandidates(r);
+              setChosenCandidate(null);
+              // 모바일은 시트를 반만 내려 번호 핀이 보이게 한다
+              if (r?.length) setSnap("half");
+            }}
+            onChosen={(i) => {
+              setChosenCandidate(i);
+              if (i != null) setSnap("full");
+            }}
+            mapChoice={mapChoice}
           />
         ) : selected ? (
           <>
@@ -480,6 +498,9 @@ export function LunchMap() {
             setSnap("full");
           }}
           bottomInset={!isDesktop && snap === "half" ? window.innerHeight * 0.5 : 0}
+          candidates={mode.kind === "add" ? candidates : null}
+          chosenCandidate={chosenCandidate}
+          onPickCandidate={(index) => setMapChoice((c) => ({ index, n: (c?.n ?? 0) + 1 }))}
         />
         {!isDesktop && !pickMode && (
           <BottomSheet snap={snap} onSnap={setSnap}>
