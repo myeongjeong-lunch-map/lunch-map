@@ -6,6 +6,7 @@ import { drawBoxRules } from "@/lib/drawBox";
 import { DRAW_ANIMATIONS, DRAW_LIMITS, drawCandidates, drawWeights, MIN_DRAW_PLACES, type DrawAnimation, type DrawBox, type DrawLimit, type DrawResult, type Place, type TeamDetail, type TeamSummary } from "@/lib/domain";
 import { CategoryDot } from "@/components/place/PlaceList";
 import { DrawShow, type ShowEntry } from "@/components/draw/DrawShow";
+import { useHalloween } from "@/components/ui/useHalloween";
 
 // 추첨 탭: 팀 목록 → 팀 화면(추첨통, 추첨 기록). 팀 화면은 몇 초마다 다시 불러
 // 조장이 추첨(다시 뽑기 포함)을 시작하면 지금 이 탭을 보고 있는 팀원 모두가 같은 연출을 본다.
@@ -199,6 +200,9 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [limit, setLimit] = useState<DrawLimit>(2);
+  const halloween = useHalloween();
+  // 마녀의 솥은 할로윈 이벤트 기간에만 고를 수 있다
+  const animations = DRAW_ANIMATIONS.filter((a) => a.key !== "cauldron" || halloween);
   const [animation, setAnimation] = useState<DrawAnimation>("race");
   const [query, setQuery] = useState("");
   const [nickname, setNickname] = useState(loadNickname);
@@ -478,8 +482,8 @@ function TeamView({ places, teams, summary, onTeamId, onTeamsChanged, onShowPlac
                 </button>
               )}
               <p className="text-xs font-bold text-muted">연출</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {DRAW_ANIMATIONS.map((a) => (
+              <div className={`mt-2 grid gap-2 ${animations.length > 2 ? "grid-cols-3" : "grid-cols-2"}`}>
+                {animations.map((a) => (
                   <button
                     key={a.key}
                     onClick={() => setAnimation(a.key)}

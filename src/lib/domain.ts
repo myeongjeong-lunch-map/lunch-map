@@ -40,6 +40,8 @@ export type Place = {
   keywords: Partial<Record<KeywordKey, number>>;
   /** 이번 주 랭킹 점수: 최근 7일 좋아요 × 2 + 최근 7일 꿀팁 수 */
   weekly_score: number;
+  /** 할로윈 이벤트 기간(lib/halloween.ts)에 남긴 꿀팁 수. 0이면 유령 가게 */
+  event_tips: number;
   created_at: string;
 };
 
@@ -180,7 +182,8 @@ export function formatMeters(meters: number): string {
 }
 
 // 랭킹. "이번 주"는 최근 7일 좋아요 × 2 + 꿀팁, "전체"는 좋아요 − 싫어요. 같으면 가까운 순.
-export type RankingPeriod = "week" | "all";
+// "할로윈"은 이벤트 기간에 꿀팁이 많이 달린(유령을 퇴치한) 가게 순.
+export type RankingPeriod = "week" | "all" | "halloween";
 
 export const WEEK_MS = 7 * 24 * 3600 * 1000;
 const WEEKLY_LIKE_POINTS = 2;
@@ -202,7 +205,8 @@ export type Ranking = {
 export function ranking(places: Place[], period: RankingPeriod): Ranking {
   const fellBack = period === "week" && places.every((p) => p.weekly_score === 0);
   const effective: RankingPeriod = fellBack ? "all" : period;
-  const score = effective === "week" ? (p: Place) => p.weekly_score : (p: Place) => p.likes - p.dislikes;
+  const score =
+    effective === "week" ? (p: Place) => p.weekly_score : effective === "halloween" ? (p: Place) => p.event_tips : (p: Place) => p.likes - p.dislikes;
   const ranked = [...places].sort((a, b) => score(b) - score(a) || (a.walking_seconds ?? Infinity) - (b.walking_seconds ?? Infinity));
   return { period: effective, fellBack, ranked };
 }
@@ -230,7 +234,7 @@ export function applyKeywords(place: Place, prev: KeywordKey[], next: KeywordKey
 
 /** 꿀팁이 하나 달린 가게 */
 export function applyTip(place: Place): Place {
-  return { ...place, tip_count: place.tip_count + 1, weekly_score: place.weekly_score + weeklyScore(0, 1) };
+  return { ...place, tip_count: place.tip_count + 1, weekly_score: place.weekly_score + weeklyScore(0, 1), event_tips: place.event_tips + 1 };
 }
 
 export function topKeyword(place: Place): { key: KeywordKey; count: number } | null {
@@ -289,6 +293,8 @@ export type DrawLimit = (typeof DRAW_LIMITS)[number];
 export const DRAW_ANIMATIONS = [
   { key: "race", label: "🏇 경주" },
   { key: "plinko", label: "🎯 플링코" },
+  // 할로윈 이벤트 연출. 고르기 버튼은 이벤트 기간에만 보이고, 기록 다시 보기는 계속 된다.
+  { key: "cauldron", label: "🧙 마녀의 솥" },
 ] as const;
 export type DrawAnimation = (typeof DRAW_ANIMATIONS)[number]["key"];
 export const MIN_DRAW_PLACES = 2;

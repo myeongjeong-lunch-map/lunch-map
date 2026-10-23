@@ -3,11 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { api } from "@/lib/api";
 import { acceptsEntries } from "@/lib/drawBox";
-import {
-  ranking,
-  type RankingPeriod,
-  type TeamSummary,
-} from "@/lib/domain";
+import { ranking, type RankingPeriod, type TeamSummary } from "@/lib/domain";
 import { usePlaceList } from "@/lib/usePlaceList";
 import type { PlaceTab } from "@/lib/naverPlaceId";
 import { NaverMap } from "@/components/map/NaverMap";
@@ -26,6 +22,8 @@ import { BottomSheet, type SheetSnap } from "@/components/ui/BottomSheet";
 import { NaverPlacePanel } from "@/components/map/NaverPlacePanel";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { DrawTab } from "@/components/draw/DrawTab";
+import { useHalloween } from "@/components/ui/useHalloween";
+import { isGhost, TRICK_CHANCE, TRICKS, type Trick } from "@/lib/halloween";
 
 const DESKTOP_QUERY = "(min-width: 768px)";
 
@@ -60,13 +58,18 @@ export function LunchMap() {
   const isDesktop = useIsDesktop();
   const { places, myVotes, myKeywords, recentTips, loadError, reload, vote, setKeywords, addTip } = usePlaceList();
   const [tab, setTab] = useState<Tab>("rank");
-  const [period, setPeriod] = useState<RankingPeriod>("week");
+  // 고르기 전에는 이벤트 기간이면 할로윈 순위, 아니면 이번 주
+  const [pickedPeriod, setPeriod] = useState<RankingPeriod | null>(null);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [mode, setMode] = useState<Mode>({ kind: "browse" });
   const [pickMode, setPickMode] = useState(false);
   const [picked, setPicked] = useState<{ lat: number; lng: number } | null>(null);
   const [snap, setSnap] = useState<SheetSnap>("half");
   const [rolling, setRolling] = useState(false);
+  // 할로윈 Trick or Treat: 마지막으로 뽑은 가게와 그때 나온 트릭(없으면 트릿)
+  const [rolled, setRolled] = useState<{ id: string; trick: Trick | null } | null>(null);
+  const halloween = useHalloween();
+  const period: RankingPeriod = pickedPeriod ?? (halloween ? "halloween" : "week");
   const [teams, setTeams] = useState<TeamSummary[] | null>(null);
   const [teamsError, setTeamsError] = useState<string | null>(null);
   const [teamId, setTeamIdState] = useState<string | null>(null);
@@ -115,13 +118,23 @@ export function LunchMap() {
     await reloadTeams();
   };
 
+  useEffect(() => {
+    // 할로윈 테마 색은 <html data-event>로 바꾼다 (globals.css)
+    if (halloween) document.documentElement.dataset.event = "halloween";
+    else delete document.documentElement.dataset.event;
+  }, [halloween]);
+
   const all = useMemo(() => places ?? [], [places]);
+  const ghosts = useMemo(() => all.filter(isGhost), [all]);
   const dice = useDicePicks(all);
 
   // 산책: 지금 열린 코스(내 코스면 courseId가 null)와 열린 장소. 경로선은 산책 지도 모듈이 계산한 값을 그대로 쓴다
   const openedCourse = useMemo(() => (mode.kind === "course" ? walk.course(mode.courseId) : null), [mode, walk]);
   const openedSpot = mode.kind === "spot" ? (walk.spotMap.get(mode.id) ?? null) : null;
-  const routeIds = useMemo(() => (mode.kind === "spot" ? (openedSpot ? [openedSpot.id] : []) : (openedCourse?.stopIds ?? [])), [mode.kind, openedSpot, openedCourse]);
+  const routeIds = useMemo(
+    () => (mode.kind === "spot" ? (openedSpot ? [openedSpot.id] : []) : (openedCourse?.stopIds ?? [])),
+    [mode.kind, openedSpot, openedCourse],
+  );
   const walkRoute = useWalkRouteLine({
     stopIds: routeIds,
     spots: walk.spotMap,
@@ -146,7 +159,7 @@ export function LunchMap() {
     return m;
   }, [recentTips]);
   const selectedId = mode.kind === "detail" ? mode.id : null;
-  const selected = selectedId ? all.find((p) => p.id === selectedId) ?? null : null;
+  const selected = selectedId ? (all.find((p) => p.id === selectedId) ?? null) : null;
   const placeTab = mode.kind === "detail" ? mode.tab : undefined;
   const mapPlaces = tab === "list" ? listed : all;
   const placeRoute = usePlaceRouteLine(selected);
@@ -166,14 +179,19 @@ export function LunchMap() {
   const roll = () => {
     if (!pool.length || rolling) return;
     setRolling(true);
+    setRolled(null);
+    const trick = halloween && Math.random() < TRICK_CHANCE ? TRICKS[Math.floor(Math.random() * TRICKS.length)] : null;
     let n = 0;
     const t = setInterval(() => {
-      setMode({ kind: "detail", id: pool[Math.floor(Math.random() * pool.length)].id });
+      let id = pool[Math.floor(Math.random() * pool.length)].id;
       if (++n > 10) {
         clearInterval(t);
+        if (trick?.pick === "farthest") id = [...pool].sort((a, b) => (b.walking_seconds ?? 0) - (a.walking_seconds ?? 0))[0].id;
+        if (halloween) setRolled({ id, trick });
         setRolling(false);
         setSnap("full");
       }
+      setMode({ kind: "detail", id });
     }, 90);
   };
 
@@ -197,10 +215,17 @@ export function LunchMap() {
 
   const panel = (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
-      <div className="shrink-0 px-5 pb-3 pt-4">
+      <div className="relative shrink-0 overflow-hidden px-5 pb-3 pt-4">
+        {halloween && (
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-1 h-10">
+            <span className="lm-bat top-1">🦇</span>
+            <span className="lm-bat top-5 [animation-delay:-3s] [animation-duration:11s]">🦇</span>
+            <span className="lm-bat top-2 [animation-delay:-6.5s] [animation-duration:13s]">🦇</span>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-2">
           <button onClick={() => setMode({ kind: "browse" })} className="text-left">
-            <p className="text-[11px] font-bold tracking-widest text-brand">MYEONGJEONG LUNCH</p>
+            <p className="text-[11px] font-bold tracking-widest text-brand">{halloween ? "🎃 HAPPY HALLOWEEN" : "MYEONGJEONG LUNCH"}</p>
             <h1 className="text-xl font-black">명정 점심 지도</h1>
           </button>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -238,14 +263,33 @@ export function LunchMap() {
             disabled={!pool.length}
             className="mt-3 w-full rounded-2xl bg-brand py-3.5 text-lg font-black text-brand-ink shadow-[0_0_30px_rgba(3,199,90,0.3)] transition active:scale-[0.98] disabled:opacity-40"
           >
-            🎲{" "}
+            {halloween ? "🍬" : "🎲"}{" "}
             {rolling
               ? "고르는 중…"
               : dice.picks.length
-                ? `후보 ${dice.picks.length}곳 중에 뭐 먹지?`
+                ? `후보 ${dice.picks.length}곳 중에 ${halloween ? "Trick or Treat!" : "뭐 먹지?"}`
                 : tab === "list" && isFiltered(filters)
-                  ? `조건 안에서 뭐 먹지? (${listed.length}곳)`
-                  : "오늘 뭐 먹지?"}
+                  ? `조건 안에서 ${halloween ? "Trick or Treat!" : "뭐 먹지?"} (${listed.length}곳)`
+                  : halloween
+                    ? "Trick or Treat!"
+                    : "오늘 뭐 먹지?"}
+          </button>
+        )}
+        {halloween && mode.kind === "browse" && tab !== "walk" && all.length > 0 && (
+          <button
+            onClick={() => ghosts.length && select(ghosts[Math.floor(Math.random() * ghosts.length)].id)}
+            className="mt-3 block w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-left"
+          >
+            <span className="flex justify-between text-xs font-bold">
+              <span>{ghosts.length ? `👻 유령 ${ghosts.length}곳 남음 · 꿀팁으로 퇴치!` : "🎃 유령을 모두 퇴치했어요!"}</span>
+              <span className="text-brand">{ghosts.length ? "유령 찾기 →" : ""}</span>
+            </span>
+            <span className="mt-2 block h-2 overflow-hidden rounded-full bg-surface-2">
+              <span className="block h-full rounded-full bg-brand transition-all" style={{ width: `${((all.length - ghosts.length) / all.length) * 100}%` }} />
+            </span>
+            <span className="mt-1 block text-[11px] text-muted">
+              퇴치 {all.length - ghosts.length} / {all.length} · 10월 30일(금)까지
+            </span>
           </button>
         )}
         {mode.kind !== "add" && tab !== "walk" && dice.picks.length > 0 && (
@@ -298,24 +342,32 @@ export function LunchMap() {
             }}
           />
         ) : selected ? (
-          <PlaceDetail
-            key={selected.id}
-            place={selected}
-            rank={rank}
-            backLabel={`${TAB_LABEL[tab].split(" ")[1]}으로`}
-            myVote={myVotes[selected.id] ?? 0}
-            myKeywords={myKeywords[selected.id] ?? []}
-            onVote={(v) => vote(selected.id, v)}
-            onKeywords={(k) => setKeywords(selected.id, k)}
-            onBack={() => setMode({ kind: "browse" })}
-            onTipAdded={addTip}
-            openTab={placeTab}
-            onOpenTab={(t) => setPlaceTab(t)}
-            drawTeams={(teams ?? []).filter((t) => acceptsEntries(t.open_box))}
-            onAddToBox={(id) => addToBox(id, selected.id)}
-            dicePicked={dice.has(selected.id)}
-            onDicePick={() => dice.toggle(selected.id)}
-          />
+          <>
+            {rolled?.id === selected.id && (
+              <p className="mx-5 mb-2 rounded-xl bg-brand/15 px-3 py-2.5 text-sm font-bold text-brand">
+                {rolled.trick ? `${rolled.trick.emoji} Trick! ${rolled.trick.text}` : "🍬 Treat! 오늘의 사탕 같은 가게예요"}
+              </p>
+            )}
+            <PlaceDetail
+              key={selected.id}
+              place={selected}
+              rank={rank}
+              backLabel={`${TAB_LABEL[tab].split(" ")[1]}으로`}
+              myVote={myVotes[selected.id] ?? 0}
+              myKeywords={myKeywords[selected.id] ?? []}
+              onVote={(v) => vote(selected.id, v)}
+              onKeywords={(k) => setKeywords(selected.id, k)}
+              onBack={() => setMode({ kind: "browse" })}
+              onTipAdded={addTip}
+              openTab={placeTab}
+              onOpenTab={(t) => setPlaceTab(t)}
+              drawTeams={(teams ?? []).filter((t) => acceptsEntries(t.open_box))}
+              onAddToBox={(id) => addToBox(id, selected.id)}
+              dicePicked={dice.has(selected.id)}
+              onDicePick={() => dice.toggle(selected.id)}
+              halloween={halloween}
+            />
+          </>
         ) : openedCourse ? (
           <CourseDetail
             key={mode.kind === "course" ? (mode.courseId ?? "draft") : "draft"}
@@ -336,7 +388,13 @@ export function LunchMap() {
           />
         ) : mode.kind === "spot" ? (
           openedSpot ? (
-            <SpotDetail key={openedSpot.id} spot={openedSpot} walk={walk} backLabel={`${TAB_LABEL[tab].split(" ")[1]}으로`} onBack={() => setMode({ kind: "browse" })} />
+            <SpotDetail
+              key={openedSpot.id}
+              spot={openedSpot}
+              walk={walk}
+              backLabel={`${TAB_LABEL[tab].split(" ")[1]}으로`}
+              onBack={() => setMode({ kind: "browse" })}
+            />
           ) : (
             <p className="p-6 text-center text-sm text-muted">산책 장소를 찾을 수 없어요.</p>
           )
@@ -349,11 +407,11 @@ export function LunchMap() {
             <WalkPanel walk={walk} onOpenCourse={openCourse} onOpenSpot={openSpot} />
           )
         ) : tab === "rank" ? (
-          <RankingList places={all} period={period} onPeriod={setPeriod} onSelect={select} />
+          <RankingList places={all} period={period} onPeriod={setPeriod} onSelect={select} halloween={halloween} />
         ) : tab === "list" ? (
           <PlaceList places={listed} total={all.length} filters={filters} onFilters={setFilters} onSelect={select} latestTip={latestTip} dicePicks={dice} />
         ) : tab === "tips" ? (
-          <TipFeed tips={recentTips} places={all} onSelect={select} />
+          <TipFeed tips={recentTips} places={all} onSelect={select} halloween={halloween} />
         ) : (
           <DrawTab
             places={all}
@@ -386,6 +444,7 @@ export function LunchMap() {
           onSelectSpot={openSpot}
           route={tab === "walk" ? walkRoute : placeRoute}
           selectedId={selectedId}
+          halloween={halloween}
           onSelect={select}
           pickMode={pickMode}
           picked={picked}

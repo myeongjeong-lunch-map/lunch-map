@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
 import { KEYWORDS, MAX_KEYWORDS_PER_PLACE, naverMapUrl, timeAgo, type KeywordKey, type MyVote, type Place, type TeamSummary, type Tip } from "@/lib/domain";
 import { canPutIntoBox } from "@/lib/drawBox";
+import { isGhost } from "@/lib/halloween";
 import type { PlaceTab } from "@/lib/naverPlaceId";
 import { CATEGORY_COLOR, CATEGORY_EMOJI } from "@/components/place/categoryStyle";
 import { CategoryDot, Walking } from "@/components/place/PlaceList";
@@ -33,9 +34,11 @@ type Props = {
   /** 🎲 후보로 담았는지 */
   dicePicked: boolean;
   onDicePick: () => void;
+  /** 할로윈 이벤트 기간이면 유령 가게 안내를 띄운다 */
+  halloween?: boolean;
 };
 
-export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote, onKeywords, onBack, onTipAdded, openTab, onOpenTab, drawTeams, onAddToBox, dicePicked, onDicePick }: Props) {
+export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote, onKeywords, onBack, onTipAdded, openTab, onOpenTab, drawTeams, onAddToBox, dicePicked, onDicePick, halloween = false }: Props) {
   const [tips, setTips] = useState<Tip[] | null>(null);
   const [body, setBody] = useState("");
   const [nickname, setNickname] = useState(loadNickname);
@@ -127,6 +130,11 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
         {place.walking_meters != null && ` · ${place.walking_meters.toLocaleString()}m`}
       </p>
       <p className="text-sm text-muted/70">{place.road_address}</p>
+      {halloween && (
+        <p className={`mt-3 rounded-xl px-3 py-2.5 text-sm font-bold ${isGhost(place) ? "bg-surface-2" : "bg-brand/15 text-brand"}`}>
+          {isGhost(place) ? "👻 이 가게엔 유령이 살아요. 아래에 꿀팁을 남기면 퇴치돼요!" : `🎃 유령 퇴치 완료! 이벤트 꿀팁 ${place.event_tips}개`}
+        </p>
+      )}
 
       <div className="mt-4 grid grid-cols-2 gap-2">
         <button

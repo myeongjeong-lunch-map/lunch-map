@@ -68,20 +68,23 @@ npm run dev                  # http://localhost:3000
 ## 기여하기
 
 1. 이슈를 만들거나 기존 이슈에 손을 든다.
-2. `master`에서 이슈 번호를 넣어 브랜치를 딴다 (`feat/12-team-ranking`, `fix/…`).
+2. `dev`에서 이슈 번호를 넣어 브랜치를 딴다 (`feat/12-team-ranking`, `fix/…`).
 3. 올리기 전에 확인한다.
    ```bash
    npm run typecheck
    npm run lint
    npm run build
    ```
-4. PR을 올린다. 본문은 [PR 템플릿](.github/pull_request_template.md)의 다섯 칸(배경·의도·구현·중점 리뷰 항목·테스트)을 채우고 첫 줄에 `Closes #이슈번호`를 쓴다. Claude로 작업하면 [CLAUDE.md](CLAUDE.md)가 이 흐름을 따르게 한다. 용어가 새로 생기거나 바뀌면 [GLOSSARY.md](GLOSSARY.md)도 같이 고친다.
+4. `dev`로 PR을 올린다. 본문은 [PR 템플릿](.github/pull_request_template.md)의 다섯 칸(배경·의도·구현·중점 리뷰 항목·테스트)을 채우고 첫 줄에 `Closes #이슈번호`를 쓴다. Claude로 작업하면 [CLAUDE.md](CLAUDE.md)가 이 흐름을 따르게 한다. 용어가 새로 생기거나 바뀌면 [GLOSSARY.md](GLOSSARY.md)도 같이 고친다.
 5. DB를 바꾸면 `supabase/migrations/`에 다음 번호로 SQL 파일을 추가한다. 이미 적용된 파일은 고치지 않는다.
 
+`dev`에 머지되면 [deploy-dev.yml](.github/workflows/deploy-dev.yml)이 Vercel dev 프로젝트(`myeongjeong-lunch-map-dev`, 개발용 키·개발 DB)에 배포한다. dev 서버에서 확인한 뒤 `dev` → `master` PR로 운영에 낸다.
 `master`에 머지되면 GitHub Actions([.github/workflows/deploy.yml](.github/workflows/deploy.yml))가 타입 검사·린트 후 Vercel 운영 환경에 자동 배포한다.
+DB를 바꾸는 PR은 개발 DB에 먼저 적용하고, 운영 DB에는 `master`에 머지하기 **전에** 적용한다.
 Vercel Hobby 플랜은 프로젝트 주인이 아닌 사람의 커밋을 Git 연동으로 배포하지 못해서, 주인 계정 토큰(`VERCEL_TOKEN` Secret)으로 CLI 배포를 한다.
 
 ## 브랜치
 
-- `master` — 실제 서비스 코드
+- `master` — 운영 서비스 코드. 머지하면 https://myeongjeong-lunch-map.vercel.app 에 배포된다
+- `dev` — 개발 서버 코드. 머지하면 https://myeongjeong-lunch-map-dev.vercel.app 에 배포된다. `dev`와 `master` 모두 PR로만 바꾼다
 - `prototype/ui-variants` — 화면 시안 A~E(버려도 되는 시안 코드). 시안 E로 결정했고 기록용으로만 둔다

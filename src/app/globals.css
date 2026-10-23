@@ -223,3 +223,78 @@ body {
     animation: none;
   }
 }
+
+/* 할로윈 이벤트 (lib/halloween.ts): 기간 중에는 <html data-event="halloween">이 붙는다 */
+:root[data-event="halloween"] {
+  --brand: #ff7a1a;
+  --brand-dark: #e5600a;
+  --brand-ink: #2a1200;
+  --gold: #ff9f1c;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-event="halloween"]:not([data-theme="light"]) {
+    --background: #16121d;
+    --surface: #211a2b;
+    --surface-2: #2c2338;
+    --line: #362b45;
+    --gold: #ffb347;
+  }
+}
+:root[data-event="halloween"][data-theme="dark"] {
+  --background: #16121d;
+  --surface: #211a2b;
+  --surface-2: #2c2338;
+  --line: #362b45;
+  --gold: #ffb347;
+}
+
+/* 유령 가게 마커는 둥실둥실 떠다닌다 */
+.lm-marker.ghost {
+  opacity: 0.8;
+  animation: lm-ghost 2.4s ease-in-out infinite;
+}
+@keyframes lm-ghost {
+  50% {
+    transform: translate(-50%, calc(-100% - 5px));
+  }
+}
+
+/* 헤더를 가로지르는 박쥐 */
+.lm-bat {
+  position: absolute;
+  left: -30px;
+  font-size: 16px;
+  pointer-events: none;
+  animation: lm-bat 9s linear infinite;
+}
+@keyframes lm-bat {
+  0% {
+    transform: translate(0, 0) rotate(-8deg);
+  }
+  25% {
+    transform: translate(120px, -8px) rotate(6deg);
+  }
+  50% {
+    transform: translate(240px, 6px) rotate(-6deg);
+  }
+  75% {
+    transform: translate(360px, -6px) rotate(8deg);
+  }
+  100% {
+    transform: translate(480px, 0) rotate(-8deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lm-marker.ghost,
+  .lm-bat {
+    animation: none;
+  }
+  .lm-bat {
+    display: none;
+  }
+}
+.lm-marker.ghost.selected {
+  animation: none;
+  opacity: 1;
+}

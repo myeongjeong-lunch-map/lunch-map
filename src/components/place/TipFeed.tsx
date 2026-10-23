@@ -1,11 +1,14 @@
 "use client";
 
 import { timeAgo, type Place, type Tip } from "@/lib/domain";
+import { exorcismTipIds } from "@/lib/halloween";
 import { CategoryDot, Walking } from "@/components/place/PlaceList";
 
 // 꿀팁 피드: 모든 가게의 최근 꿀팁. 누르면 그 가게로 간다.
-export function TipFeed({ tips, places, onSelect }: { tips: Tip[] | null; places: Place[]; onSelect: (id: string) => void }) {
+// 할로윈 이벤트 기간에는 가게마다 첫 꿀팁에 "유령 퇴치" 표시를 단다.
+export function TipFeed({ tips, places, onSelect, halloween = false }: { tips: Tip[] | null; places: Place[]; onSelect: (id: string) => void; halloween?: boolean }) {
   const byId = new Map(places.map((p) => [p.id, p]));
+  const exorcised = halloween && tips ? exorcismTipIds(tips) : new Set<string>();
   if (tips == null) return <p className="p-5 text-sm text-muted">불러오는 중…</p>;
   if (tips.length === 0) return <p className="p-8 text-center text-sm text-muted">아직 꿀팁이 없어요. 가게를 눌러 첫 꿀팁을 남겨 주세요!</p>;
   return (
@@ -22,6 +25,7 @@ export function TipFeed({ tips, places, onSelect }: { tips: Tip[] | null; places
               <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">{t.body}</p>
               <p className="mt-1.5 text-xs text-muted">
                 {t.nickname || "익명"} · {timeAgo(t.created_at)}
+                {exorcised.has(t.id) && <span className="ml-1.5 font-bold text-brand">👻 유령 퇴치!</span>}
               </p>
             </button>
           </li>

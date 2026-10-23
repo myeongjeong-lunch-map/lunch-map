@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CAMPUS, WALK_KIND_EMOJI, type Place, type WalkSpot } from "@/lib/domain";
 import { CATEGORY_EMOJI } from "@/components/place/categoryStyle";
+import { isGhost } from "@/lib/halloween";
 import type { RouteLine } from "@/components/map/routeLine";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- 네이버 지도 JS SDK는 타입 정의를 제공하지 않는다 */
@@ -119,6 +120,8 @@ type Props = {
   /** 지도에 그릴 경로(가게 또는 산책). 만드는 일은 routeLine 모듈이 하고 여기서는 그리기만 한다 */
   route: RouteLine | null;
   selectedId: string | null;
+  /** 할로윈 이벤트: 핀이 🎃, 유령 가게는 👻 */
+  halloween?: boolean;
   onSelect: (id: string | null) => void;
   /** 가게 추가 시 핀 직접 꽂기 모드 */
   pickMode: boolean;
@@ -128,7 +131,7 @@ type Props = {
   bottomInset: number;
 };
 
-export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, selectedId, onSelect, pickMode, picked, onPick, bottomInset }: Props) {
+export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, selectedId, halloween = false, onSelect, pickMode, picked, onPick, bottomInset }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
@@ -195,7 +198,9 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
     for (const p of places) {
       seen.add(p.id);
       const selected = p.id === selectedId;
-      const content = `<div class="lm-marker${selected ? " selected" : ""}"><span class="emoji">${CATEGORY_EMOJI[p.category]}</span><span class="label">${escapeHtml(p.name)}</span></div>`;
+      const ghost = halloween && isGhost(p);
+      const emoji = halloween ? (ghost ? "👻" : "🎃") : CATEGORY_EMOJI[p.category];
+      const content = `<div class="lm-marker${selected ? " selected" : ""}${ghost ? " ghost" : ""}"><span class="emoji">${emoji}</span><span class="label">${escapeHtml(p.name)}</span></div>`;
       const existing = markers.current.get(p.id);
       if (existing) {
         existing.setIcon({ content });
@@ -217,7 +222,7 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
         markers.current.delete(id);
       }
     }
-  }, [places, selectedId, ready]);
+  }, [places, selectedId, halloween, ready]);
 
   // 산책 장소 마커. 지금 보는 코스 안의 장소는 이모지 자리에 순서 번호를 단다
   useEffect(() => {

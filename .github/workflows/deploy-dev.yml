@@ -1,0 +1,36 @@
+# dev에 올라오면 Vercel dev 프로젝트(myeongjeong-lunch-map-dev)에 배포한다. 개발용 키·개발 DB를 쓴다.
+# 운영 배포(deploy.yml)와 같은 방식이고, 프로젝트만 다르다.
+# 필요한 저장소 Secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_DEV_PROJECT_ID
+name: Deploy (Vercel dev)
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DEV_PROJECT_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 타입 검사·린트
+        run: npm run typecheck && npm run lint
+      - name: Vercel 환경 변수 받기
+        run: npx vercel@65.0.0 pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: 빌드
+        run: npx vercel@65.0.0 build --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - name: 배포
+        run: npx vercel@65.0.0 deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
