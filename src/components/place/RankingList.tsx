@@ -18,10 +18,10 @@ export function RankingList({ places, period, onPeriod, onSelect, halloween = fa
 
   return (
     <ol className="px-3 pb-28">
-      <li className="flex items-center gap-2 px-2 pb-2">
-        <div className="flex rounded-full bg-surface p-0.5 text-xs font-bold">
+      <li className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2 pb-2">
+        <div className="flex shrink-0 rounded-full bg-surface p-0.5 text-xs font-bold">
           {[...(halloween ? ([["halloween", "🎃 할로윈"]] as const) : []), ["week", "이번 주"] as const, ["all", "전체"] as const].map(([k, l]) => (
-            <button key={k} onClick={() => onPeriod(k)} className={`rounded-full px-3 py-1 ${period === k ? "bg-foreground text-background" : "text-muted"}`}>
+            <button key={k} onClick={() => onPeriod(k)} className={`whitespace-nowrap rounded-full px-3 py-1 ${period === k ? "bg-foreground text-background" : "text-muted"}`}>
               {l}
             </button>
           ))}
