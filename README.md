@@ -6,6 +6,7 @@
 **https://myeongjeong-lunch-map.vercel.app**
 
 - 🏆 랭킹(이번 주 / 전체), 📍 목록(카테고리·키워드·도보 시간 필터), 💡 꿀팁 피드
+- 🚶 산책 — 근처 공원·예술의전당 추천 코스와 내 코스, 코스 시간(걷기 + 둘러보기)
 - 🎲 오늘 뭐 먹지? — 지금 필터 안에서 한 곳을 골라 준다
 - 🎟️ 추첨 — 팀 추첨통에 가게를 넣고(많이 넣을수록 잘 뽑힘) 조장이 경주·플링코로 추첨한다
 - 가게 카드: 좋아요·싫어요, 키워드(최대 5개), 꿀팁, 네이버 플레이스 메뉴판·사진·리뷰
@@ -17,7 +18,7 @@
 | 문서 | 내용 |
 |---|---|
 | [GLOSSARY.md](GLOSSARY.md) | 용어 (가게, 꿀팁, 키워드, 평가, 랭킹, 도보 시간 …). 코드와 화면 문구는 이 용어를 따른다 |
-| [docs/adr/](docs/adr/) | 되돌리기 어렵거나 이유가 안 보이는 결정 (도보 시간 매일 재계산, 메뉴판을 네이버 페이지로 띄우는 이유) |
+| [docs/adr/](docs/adr/) | 되돌리기 어렵거나 이유가 안 보이는 결정 (도보 시간 매일 재계산, 메뉴판을 네이버 페이지로 띄우는 이유, 산책 코스 시간은 구간을 더해서 구함) |
 | [AGENTS.md](AGENTS.md) | Next.js 16을 쓰므로 코드를 쓰기 전에 `node_modules/next/dist/docs/`를 확인할 것 |
 
 ## 구조
@@ -32,7 +33,9 @@ src/
       teams/                 팀 목록·만들기, [id]/members·box(추첨통)·box/entries·box/draw(다시 뽑기 포함)·box/decide
       tips/                  꿀팁 피드
       search/, reverse/      네이버 장소 검색, 좌표 → 주소
+      walk/                  산책 장소·코스·구간, path(구간별 보행 경로)
       cron/walking/          매일 도보 시간 재계산 (Vercel Cron)
+      cron/walk-legs/        매일 산책 구간 재계산 (Vercel Cron)
       admin/                 관리자 수정·삭제
   components/                LunchMap(전체 틀), NaverMap, PlaceList, RankingList, TipFeed, PlaceDetail, AddPlace …
   lib/

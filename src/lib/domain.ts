@@ -57,6 +57,103 @@ export function walkingMinutes(place: Pick<Place, "walking_seconds">): number | 
   return place.walking_seconds == null ? null : Math.max(1, Math.round(place.walking_seconds / 60));
 }
 
+// 산책 (GLOSSARY.md: 산책 장소, 산책 코스, 구간, 걷는 시간, 둘러보는 시간, 코스 시간)
+export const MAX_COURSE_STOPS = 5;
+export const WALK_SPOT_KINDS = [
+  { key: "park", label: "공원", emoji: "🌳" },
+  { key: "culture", label: "문화시설", emoji: "🎭" },
+  { key: "trail", label: "산책길", emoji: "🌉" },
+] as const;
+export type WalkSpotKind = (typeof WALK_SPOT_KINDS)[number]["key"];
+export const WALK_KIND_EMOJI = Object.fromEntries(WALK_SPOT_KINDS.map((k) => [k.key, k.emoji])) as Record<WalkSpotKind, string>;
+export const WALK_KIND_LABEL = Object.fromEntries(WALK_SPOT_KINDS.map((k) => [k.key, k.label])) as Record<WalkSpotKind, string>;
+/** 코스 시간이 이보다 길면 카드에 "점심시간엔 빠듯"을 붙인다 */
+export const LUNCH_TIGHT_MINUTES = 45;
+
+export type WalkSpot = {
+  id: string;
+  name: string;
+  kind: WalkSpotKind;
+  summary: string | null;
+  lat: number;
+  lng: number;
+  stay_minutes: number;
+  naver_place_id: string | null;
+};
+export type WalkCourseStop = { spot_id: string; stay_minutes: number | null };
+export type WalkCourse = { id: string; name: string; summary: string | null; stops: WalkCourseStop[] };
+/** a가 null이면 캠퍼스. 방향 없음 */
+export type WalkLeg = { a: string | null; b: string; seconds: number; meters: number; source: "tmap" | "estimate" };
+
+/** 구간 찾기 키. 방향 없이 같은 쌍이면 같은 키. null(캠퍼스)은 "campus" */
+export function legKey(x: string | null, y: string | null): string {
+  if (x === null || y === null) return `campus|${x ?? y}`;
+  return x < y ? `${x}|${y}` : `${y}|${x}`;
+}
+
+export function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+export type CourseTime = {
+  /** 캠퍼스 → 1번 → … → 캠퍼스, stops.length + 1개 */
+  legs: { seconds: number; meters: number; source: "tmap" | "estimate" | "missing" }[];
+  walkSeconds: number;
+  meters: number;
+  stayMinutes: number;
+  /** 걷는 분(반올림) + 둘러보는 분 */
+  totalMinutes: number;
+  /** 추정값이나 아직 계산 안 된 구간이 있으면 true */
+  rough: boolean;
+};
+
+export function courseTime(stops: WalkCourseStop[], spots: Map<string, WalkSpot>, legs: Map<string, WalkLeg>): CourseTime {
+  const points: (string | null)[] = [null, ...stops.map((s) => s.spot_id), null];
+  const out: CourseTime["legs"] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const [x, y] = [points[i], points[i + 1]];
+    const known = legs.get(legKey(x, y));
+    if (known) {
+      out.push({ seconds: known.seconds, meters: known.meters, source: known.source });
+      continue;
+    }
+    const from = x ? spots.get(x) : null;
+    const to = y ? spots.get(y) : null;
+    const a = from ?? CAMPUS;
+    const b = to ?? CAMPUS;
+    const meters = Math.round(haversine(a.lat, a.lng, b.lat, b.lng) * 1.3);
+    out.push({ seconds: Math.round(meters / (4000 / 3600)), meters, source: "missing" });
+  }
+  const walkSeconds = out.reduce((n, l) => n + l.seconds, 0);
+  const stayMinutes = stops.reduce((n, s) => n + (s.stay_minutes ?? spots.get(s.spot_id)?.stay_minutes ?? 0), 0);
+  return {
+    legs: out,
+    walkSeconds,
+    meters: out.reduce((n, l) => n + l.meters, 0),
+    stayMinutes,
+    totalMinutes: Math.round(walkSeconds / 60) + stayMinutes,
+    rough: out.some((l) => l.source !== "tmap"),
+  };
+}
+
+/** 캠퍼스 → 산책 장소 한 방향 걷기. 구간이 아직 없으면 직선거리로 어림잡는다 */
+export function campusWalk(spot: WalkSpot, legs: Map<string, WalkLeg>): { minutes: number; meters: number; rough: boolean } {
+  const known = legs.get(legKey(null, spot.id));
+  const meters = known?.meters ?? Math.round(haversine(CAMPUS.lat, CAMPUS.lng, spot.lat, spot.lng) * 1.3);
+  const seconds = known?.seconds ?? Math.round(meters / (4000 / 3600));
+  return { minutes: Math.max(1, Math.round(seconds / 60)), meters, rough: known?.source !== "tmap" };
+}
+
+/** 지도 위 칩과 카드에 쓰는 거리 문구: 640m, 1.3km */
+export function formatMeters(meters: number): string {
+  return meters < 1000 ? `${Math.round(meters / 10) * 10}m` : `${(meters / 1000).toFixed(1)}km`;
+}
+
 // 랭킹. "전체"는 좋아요 − 싫어요. 같으면 가까운 순.
 export type RankingPeriod = "week" | "all";
 
