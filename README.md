@@ -65,6 +65,28 @@ npm run dev                  # http://localhost:3000
 2. **내 키로 따로 쓰기** — `.env.example`의 주석대로 각 서비스에서 무료로 발급받고, 새 Supabase 프로젝트에 `supabase/migrations/`를 순서대로 실행한다.
    네이버 지도 허용 URL에 `http://localhost:3000`을 넣어야 지도가 뜬다.
 
+## Claude에 점심 지도 연결하기 (MCP)
+
+점심 지도는 MCP 서버(`/api/mcp`, 읽기 전용, 인증 없음)를 연다. 연결하면 Claude에게 "10분 안에 갈 수 있는 국밥집 추천해 줘"처럼 물어볼 수 있다.
+
+- **Claude Code**
+  ```bash
+  claude mcp add --transport http lunch-map https://myeongjeong-lunch-map.vercel.app/api/mcp
+  ```
+- **Claude 앱 · claude.ai**: 설정 → 커넥터 → 사용자 지정 커넥터 추가 → URL에 `https://myeongjeong-lunch-map.vercel.app/api/mcp`
+- dev 서버는 `https://myeongjeong-lunch-map-dev.vercel.app/api/mcp`
+
+| 도구 | 하는 일 |
+|---|---|
+| `search_places` | 이름·카테고리·키워드·최대 도보 분으로 가게 찾기 |
+| `get_place` | 가게 하나의 주소·도보 시간·평가·키워드·최근 꿀팁·네이버 지도 링크 |
+| `get_ranking` | 랭킹 (이번 주 / 전체) |
+| `pick_lunch` | 오늘 뭐 먹지: 조건 안에서 무작위 한 곳 |
+| `get_team_box` | 팀의 열린 추첨통: 가게·넣은 횟수·확률·넣은 사람 |
+| `list_walk_courses` | 추천 산책 코스와 코스 시간 |
+
+도구는 [src/lib/server/mcpTools.ts](src/lib/server/mcpTools.ts)에 있다. 쓰기 도구(꿀팁·평가·추첨통 넣기)는 아직 없다.
+
 ## 기여하기
 
 1. 이슈를 만들거나 기존 이슈에 손을 든다.
