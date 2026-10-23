@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CAMPUS, type Place } from "@/lib/domain";
+import { api } from "@/lib/api";
+import { CAMPUS, walkingMinutes, type Place } from "@/lib/domain";
 import { CATEGORY_EMOJI } from "./categoryStyle";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- 네이버 지도 JS SDK는 타입 정의를 제공하지 않는다 */
@@ -17,6 +18,37 @@ function sdkReady(): boolean {
 }
 
 const LABEL_ZOOM = 18;
+const ROUTE_DRAW_MS = 700;
+
+type LngLat = [number, number];
+
+/** 경로를 처음부터 길이 비율 t(0~1)만큼만 자른다. 마지막 점은 구간 사이를 보간한다. */
+function slicePath(path: LngLat[], cum: number[], t: number): LngLat[] {
+  const target = cum[cum.length - 1] * t;
+  const out: LngLat[] = [path[0]];
+  for (let i = 1; i < path.length; i++) {
+    if (cum[i] <= target) {
+      out.push(path[i]);
+      continue;
+    }
+    const r = (target - cum[i - 1]) / (cum[i] - cum[i - 1] || 1);
+    out.push([path[i - 1][0] + (path[i][0] - path[i - 1][0]) * r, path[i - 1][1] + (path[i][1] - path[i - 1][1]) * r]);
+    break;
+  }
+  return out;
+}
+
+function cumulative(path: LngLat[]): number[] {
+  const cum = [0];
+  for (let i = 1; i < path.length; i++) cum.push(cum[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
+  return cum;
+}
+
+function routeChip(place: Place): string | null {
+  const minutes = walkingMinutes(place);
+  if (minutes == null || place.walking_meters == null) return null;
+  return `${(place.walking_meters / 1000).toFixed(1)}km · 도보 예상 ${minutes}분`;
+}
 
 let sdkPromise: Promise<any> | null = null;
 
@@ -145,16 +177,70 @@ export function NaverMap({ places, selectedId, onSelect, pickMode, picked, onPic
     }
   }, [places, selectedId, ready]);
 
-  // 선택한 가게로 이동 (모바일 시트에 가리지 않게 위로 올린다)
+  // 선택한 가게: 캠퍼스와 가게가 함께 보이게 맞추고, 보행 경로를 그리며 거리·시간 칩을 띄운다.
+  // 저장된 경로가 없으면(추정값, 아직 계산 전) 직선 점선으로 대신한다.
   useEffect(() => {
     const naver = window.naver;
     if (!ready || !naver?.maps || !map.current || !selectedId) return;
     const p = places.find((x) => x.id === selectedId);
     if (!p) return;
     const m = map.current;
-    m.panTo(new naver.maps.LatLng(p.lat, p.lng), { duration: 300 });
-    if (bottomInset > 0) setTimeout(() => m.panBy(new naver.maps.Point(0, bottomInset / 2)), 320);
-    // places가 바뀔 때마다 다시 움직이지 않도록 선택이 바뀔 때만 실행한다
+    const campus = new naver.maps.LatLng(CAMPUS.lat, CAMPUS.lng);
+    const target = new naver.maps.LatLng(p.lat, p.lng);
+    // 모바일 시트에 가리지 않게 아래 여백을 시트 높이만큼 더 준다
+    m.fitBounds(new naver.maps.LatLngBounds(campus, campus).extend(target), { top: 80, right: 60, bottom: 80 + bottomInset, left: 60 });
+    if (m.getZoom() > LABEL_ZOOM) m.setZoom(LABEL_ZOOM);
+
+    let cancelled = false;
+    let frame = 0;
+    let line: any = null;
+    let chip: any = null;
+    api
+      .placePath(p.id)
+      .then((r) => r.path)
+      .catch(() => null)
+      .then((stored) => {
+        if (cancelled) return;
+        const path: LngLat[] = [[CAMPUS.lng, CAMPUS.lat], ...(stored ?? []), [p.lng, p.lat]];
+        const cum = cumulative(path);
+        const toLatLngs = (pts: LngLat[]) => pts.map(([lng, lat]) => new naver.maps.LatLng(lat, lng));
+        line = new naver.maps.Polyline({
+          map: m,
+          path: toLatLngs(path.slice(0, 1)),
+          strokeColor: "#03c75a",
+          strokeWeight: 6,
+          strokeOpacity: 0.9,
+          strokeStyle: stored ? "solid" : "shortdash",
+          strokeLineCap: "round",
+          strokeLineJoin: "round",
+          zIndex: 5,
+        });
+        const text = routeChip(p);
+        if (text) {
+          const [lng, lat] = slicePath(path, cum, 0.5).at(-1)!;
+          chip = new naver.maps.Marker({
+            map: m,
+            position: new naver.maps.LatLng(lat, lng),
+            icon: { content: `<div class="lm-route-chip">${escapeHtml(text)}</div>` },
+            zIndex: 150,
+            clickable: false,
+          });
+        }
+        const start = performance.now();
+        const step = (now: number) => {
+          const t = Math.min(1, (now - start) / ROUTE_DRAW_MS);
+          line.setPath(toLatLngs(slicePath(path, cum, 1 - (1 - t) ** 3)));
+          if (t < 1) frame = requestAnimationFrame(step);
+        };
+        frame = requestAnimationFrame(step);
+      });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      line?.setMap(null);
+      chip?.setMap(null);
+    };
+    // places가 바뀔 때마다 다시 그리지 않도록 선택이 바뀔 때만 실행한다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, ready]);
 

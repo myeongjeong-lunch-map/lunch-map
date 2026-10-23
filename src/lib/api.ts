@@ -28,6 +28,7 @@ export type PlacesResponse = { places: Place[]; myVotes: Record<string, MyVote>;
 export const api = {
   places: () => request<PlacesResponse>("/api/places"),
   addPlace: (body: Record<string, unknown>) => request<{ id: string }>("/api/places", { method: "POST", body: JSON.stringify(body) }),
+  placePath: (placeId: string) => request<{ path: [number, number][] | null }>(`/api/places/${placeId}/path`),
   tips: (placeId: string) => request<{ tips: Tip[] }>(`/api/places/${placeId}/tips`),
   recentTips: () => request<{ tips: Tip[] }>("/api/tips?limit=60"),
   addTip: (placeId: string, body: Record<string, unknown>) => request<{ tip: Tip }>(`/api/places/${placeId}/tips`, { method: "POST", body: JSON.stringify(body) }),

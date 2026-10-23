@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
         walking_seconds: walking.seconds,
         walking_meters: walking.meters,
         walking_source: walking.source,
+        walking_path: walking.path,
         walking_updated_at: new Date().toISOString(),
       })
       .select("id")
