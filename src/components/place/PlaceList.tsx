@@ -4,25 +4,32 @@ import { CATEGORIES, KEYWORD_LABEL, KEYWORDS, topKeyword, walkingMinutes, type C
 import { CATEGORY_COLOR, CATEGORY_EMOJI } from "@/components/place/categoryStyle";
 
 export type Filters = {
-  category: Category | "all";
-  keyword: KeywordKey | null;
+  /** 고른 카테고리. 하나라도 맞으면 보여 주고, 비어 있으면 전체 */
+  categories: Category[];
+  /** 고른 키워드. 모두 가진 가게만 보여 준다 */
+  keywords: KeywordKey[];
   maxMinutes: number | null;
   text: string;
 };
 
-export const DEFAULT_FILTERS: Filters = { category: "all", keyword: null, maxMinutes: null, text: "" };
+export const DEFAULT_FILTERS: Filters = { categories: [], keywords: [], maxMinutes: null, text: "" };
 
 export function isFiltered(f: Filters): boolean {
-  return f.category !== "all" || f.keyword != null || f.maxMinutes != null || f.text.trim() !== "";
+  return f.categories.length > 0 || f.keywords.length > 0 || f.maxMinutes != null || f.text.trim() !== "";
 }
 
-// 목록은 가까운 순. 키워드 필터는 그 키워드를 한 명이라도 고른 가게만 남긴다.
+/** 칩 하나를 켜고 끈다 */
+function toggle<T>(list: T[], v: T): T[] {
+  return list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
+}
+
+// 목록은 가까운 순. 카테고리는 고른 것 중 하나라도 맞으면, 키워드는 고른 키워드를 모두 한 명 이상 고른 가게만 남긴다.
 export function applyFilters(places: Place[], f: Filters): Place[] {
   const text = f.text.trim().toLowerCase();
   return places
     .filter((p) => {
-      if (f.category !== "all" && p.category !== f.category) return false;
-      if (f.keyword && !(p.keywords[f.keyword] ?? 0)) return false;
+      if (f.categories.length && !f.categories.includes(p.category)) return false;
+      if (f.keywords.some((k) => !(p.keywords[k] ?? 0))) return false;
       if (f.maxMinutes != null) {
         const m = walkingMinutes(p);
         if (m == null || m > f.maxMinutes) return false;
@@ -75,18 +82,18 @@ export function PlaceList({ places, total, filters, onFilters, onSelect, latestT
           className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm outline-none placeholder:text-muted focus:border-brand"
         />
         <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4">
-          <Chip on={filters.category === "all"} onClick={() => set({ category: "all" })}>
+          <Chip on={filters.categories.length === 0} onClick={() => set({ categories: [] })}>
             전체
           </Chip>
           {CATEGORIES.map((c) => (
-            <Chip key={c} on={filters.category === c} onClick={() => set({ category: filters.category === c ? "all" : c })}>
+            <Chip key={c} on={filters.categories.includes(c)} onClick={() => set({ categories: toggle(filters.categories, c) })}>
               {CATEGORY_EMOJI[c]} {c}
             </Chip>
           ))}
         </div>
         <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4">
           {KEYWORDS.map((k) => (
-            <Chip key={k.key} on={filters.keyword === k.key} onClick={() => set({ keyword: filters.keyword === k.key ? null : k.key })}>
+            <Chip key={k.key} on={filters.keywords.includes(k.key)} onClick={() => set({ keywords: toggle(filters.keywords, k.key) })}>
               {k.label}
             </Chip>
           ))}
