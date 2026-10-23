@@ -6,6 +6,7 @@
 **https://myeongjeong-lunch-map.vercel.app**
 
 - 🏆 랭킹(이번 주 / 전체), 📍 목록(카테고리·키워드·도보 시간 필터), 💡 꿀팁 피드
+- 🚶 산책 — 근처 공원·예술의전당 추천 코스와 내 코스, 코스 시간(걷기 + 둘러보기)
 - 🎲 오늘 뭐 먹지? — 지금 필터 안에서 한 곳을 골라 준다
 - 🎟️ 추첨 — 팀 추첨통에 가게를 넣고(많이 넣을수록 잘 뽑힘) 조장이 경주·플링코로 추첨한다
 - 가게 카드: 좋아요·싫어요, 키워드(최대 5개), 꿀팁, 네이버 플레이스 메뉴판·사진·리뷰
@@ -17,7 +18,7 @@
 | 문서 | 내용 |
 |---|---|
 | [GLOSSARY.md](GLOSSARY.md) | 용어 (가게, 꿀팁, 키워드, 평가, 랭킹, 도보 시간 …). 코드와 화면 문구는 이 용어를 따른다 |
-| [docs/adr/](docs/adr/) | 되돌리기 어렵거나 이유가 안 보이는 결정 (도보 시간 매일 재계산, 메뉴판을 네이버 페이지로 띄우는 이유) |
+| [docs/adr/](docs/adr/) | 되돌리기 어렵거나 이유가 안 보이는 결정 (도보 시간 매일 재계산, 메뉴판을 네이버 페이지로 띄우는 이유, 산책 코스 시간은 구간을 더해서 구함) |
 | [AGENTS.md](AGENTS.md) | Next.js 16을 쓰므로 코드를 쓰기 전에 `node_modules/next/dist/docs/`를 확인할 것 |
 
 ## 구조
@@ -32,9 +33,11 @@ src/
       teams/                 팀 목록·만들기, [id]/members·box(추첨통)·box/entries·box/draw(다시 뽑기 포함)·box/decide
       tips/                  꿀팁 피드
       search/, reverse/      네이버 장소 검색, 좌표 → 주소
+      walk/                  산책 장소·코스·구간, path(구간별 보행 경로)
       cron/walking/          매일 도보 시간 재계산 (Vercel Cron)
+      cron/walk-legs/        매일 산책 구간 재계산 (Vercel Cron)
       admin/                 관리자 수정·삭제
-  components/                LunchMap(전체 틀), NaverMap, PlaceList, RankingList, TipFeed, PlaceDetail, AddPlace …
+  components/                LunchMap(전체 틀) + map/ place/ draw/ walk/ admin/ ui/ (기능별 폴더)
   lib/
     domain.ts                용어·타입·키워드 목록·랭킹 계산
     server/                  Supabase, 네이버, TMAP, 쓰기 방어(허니팟·속도 제한), 쿠키
@@ -65,23 +68,23 @@ npm run dev                  # http://localhost:3000
 ## 기여하기
 
 1. 이슈를 만들거나 기존 이슈에 손을 든다.
-2. `dev`에서 브랜치를 딴다 (`feat/…`, `fix/…`).
+2. `dev`에서 이슈 번호를 넣어 브랜치를 딴다 (`feat/12-team-ranking`, `fix/…`).
 3. 올리기 전에 확인한다.
    ```bash
    npm run typecheck
    npm run lint
    npm run build
    ```
-4. `dev`로 PR을 올린다. 머지되면 dev 서버에서 확인한 뒤 `dev` → `master` PR로 운영에 낸다. 용어가 새로 생기거나 바뀌면 [GLOSSARY.md](GLOSSARY.md)도 같이 고친다.
+4. `dev`로 PR을 올린다. 본문은 [PR 템플릿](.github/pull_request_template.md)의 다섯 칸(배경·의도·구현·중점 리뷰 항목·테스트)을 채우고 첫 줄에 `Closes #이슈번호`를 쓴다. Claude로 작업하면 [CLAUDE.md](CLAUDE.md)가 이 흐름을 따르게 한다. 용어가 새로 생기거나 바뀌면 [GLOSSARY.md](GLOSSARY.md)도 같이 고친다.
 5. DB를 바꾸면 `supabase/migrations/`에 다음 번호로 SQL 파일을 추가한다. 이미 적용된 파일은 고치지 않는다.
 
+`dev`에 머지되면 [deploy-dev.yml](.github/workflows/deploy-dev.yml)이 Vercel dev 프로젝트(`myeongjeong-lunch-map-dev`, 개발용 키·개발 DB)에 배포한다. dev 서버에서 확인한 뒤 `dev` → `master` PR로 운영에 낸다.
 `master`에 머지되면 GitHub Actions([.github/workflows/deploy.yml](.github/workflows/deploy.yml))가 타입 검사·린트 후 Vercel 운영 환경에 자동 배포한다.
-`dev`에 머지되면 [deploy-dev.yml](.github/workflows/deploy-dev.yml)이 같은 방식으로 Vercel dev 프로젝트(`myeongjeong-lunch-map-dev`, 개발용 키·개발 DB)에 배포한다.
 DB를 바꾸는 PR은 개발 DB에 먼저 적용하고, 운영 DB에는 `master`에 머지하기 **전에** 적용한다.
 Vercel Hobby 플랜은 프로젝트 주인이 아닌 사람의 커밋을 Git 연동으로 배포하지 못해서, 주인 계정 토큰(`VERCEL_TOKEN` Secret)으로 CLI 배포를 한다.
 
 ## 브랜치
 
-- `master` — 운영 서비스 코드. push하면 https://myeongjeong-lunch-map.vercel.app 에 배포된다
-- `dev` — 개발 서버 코드. push하면 https://myeongjeong-lunch-map-dev.vercel.app 에 배포된다
+- `master` — 운영 서비스 코드. 머지하면 https://myeongjeong-lunch-map.vercel.app 에 배포된다
+- `dev` — 개발 서버 코드. 머지하면 https://myeongjeong-lunch-map-dev.vercel.app 에 배포된다. `dev`와 `master` 모두 PR로만 바꾼다
 - `prototype/ui-variants` — 화면 시안 A~E(버려도 되는 시안 코드). 시안 E로 결정했고 기록용으로만 둔다

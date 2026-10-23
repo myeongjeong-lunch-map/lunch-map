@@ -112,3 +112,9 @@ export function cleanText(v: unknown, max: number): string | null {
   if (!t) return null;
   return t.slice(0, max);
 }
+
+// Vercel Cron이 Authorization: Bearer $CRON_SECRET 으로 호출한다. 맞지 않으면 401.
+export function requireCron(req: NextRequest): void {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) throw new HttpError(401, "unauthorized");
+}

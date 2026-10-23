@@ -1,4 +1,4 @@
-import type { DrawAnimation, DrawLimit, DrawResult, KeywordKey, MyVote, Place, TeamDetail, TeamSummary, Tip } from "./domain";
+import type { DrawAnimation, DrawLimit, DrawResult, KeywordKey, MyVote, Place, TeamDetail, TeamSummary, Tip, WalkCourse, WalkLeg, WalkSpot } from "./domain";
 
 export class ApiError extends Error {
   constructor(
@@ -25,9 +25,16 @@ export type SearchResult = { name: string; roadAddress: string; naverCategory: s
 
 export type PlacesResponse = { places: Place[]; myVotes: Record<string, MyVote>; myKeywords: Record<string, KeywordKey[]> };
 
+export type WalkResponse = { spots: WalkSpot[]; courses: WalkCourse[]; legs: WalkLeg[] };
+
+export type WalkPathResponse = { legs: { path: [number, number][] | null }[] };
+
 export const api = {
   places: () => request<PlacesResponse>("/api/places"),
   addPlace: (body: Record<string, unknown>) => request<{ id: string }>("/api/places", { method: "POST", body: JSON.stringify(body) }),
+  placePath: (placeId: string) => request<{ path: [number, number][] | null }>(`/api/places/${placeId}/path`),
+  walk: () => request<WalkResponse>("/api/walk"),
+  walkPath: (stopIds: string[]) => request<WalkPathResponse>(`/api/walk/path?stops=${stopIds.join(",")}`),
   tips: (placeId: string) => request<{ tips: Tip[] }>(`/api/places/${placeId}/tips`),
   recentTips: () => request<{ tips: Tip[] }>("/api/tips?limit=60"),
   addTip: (placeId: string, body: Record<string, unknown>) => request<{ tip: Tip }>(`/api/places/${placeId}/tips`, { method: "POST", body: JSON.stringify(body) }),
@@ -68,6 +75,27 @@ export function loadNickname(): string {
 export function saveNickname(v: string): void {
   try {
     localStorage.setItem(NICKNAME_KEY, v);
+  } catch {
+    // 저장 못 해도 동작에는 문제 없음
+  }
+}
+
+// 내 코스(산책 장소 id, 순서대로)도 이 브라우저에만 기억한다
+const WALK_DRAFT_KEY = "lm_walk_draft";
+
+export function loadWalkDraft(): string[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(WALK_DRAFT_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveWalkDraft(ids: string[]): void {
+  try {
+    if (ids.length) localStorage.setItem(WALK_DRAFT_KEY, JSON.stringify(ids));
+    else localStorage.removeItem(WALK_DRAFT_KEY);
   } catch {
     // 저장 못 해도 동작에는 문제 없음
   }

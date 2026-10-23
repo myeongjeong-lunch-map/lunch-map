@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { THEME_INIT_SCRIPT } from "@/components/ThemeToggle";
+import { THEME_INIT_SCRIPT } from "@/components/ui/ThemeToggle";
 import "./globals.css";
 
 export const metadata: Metadata = {
