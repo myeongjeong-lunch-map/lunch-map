@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { api, loadWalkDraft, saveWalkDraft, type WalkResponse } from "@/lib/api";
 import { acceptsEntries } from "@/lib/drawBox";
 import {
@@ -9,17 +9,14 @@ import {
   courseTime,
   formatMeters,
   legKey,
-  rankPlaces,
-  type KeywordKey,
-  type MyVote,
-  type Place,
+  ranking,
   type RankingPeriod,
   type TeamSummary,
-  type Tip,
   type WalkCourseStop,
   type WalkLeg,
   type WalkSpot,
 } from "@/lib/domain";
+import { usePlaceList } from "@/lib/usePlaceList";
 import type { PlaceTab } from "@/lib/naverPlaceId";
 import { NaverMap, type MapRoute } from "@/components/map/NaverMap";
 import { PlaceList, applyFilters, isFiltered, DEFAULT_FILTERS, type Filters } from "@/components/place/PlaceList";
@@ -69,11 +66,7 @@ type WalkPathState = { key: string; legs: { path: [number, number][] | null }[] 
 
 export function LunchMap() {
   const isDesktop = useIsDesktop();
-  const [places, setPlaces] = useState<Place[] | null>(null);
-  const [myVotes, setMyVotes] = useState<Record<string, MyVote>>({});
-  const [myKeywords, setMyKeywords] = useState<Record<string, KeywordKey[]>>({});
-  const [recentTips, setRecentTips] = useState<Tip[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { places, myVotes, myKeywords, recentTips, loadError, reload, vote, setKeywords, addTip } = usePlaceList();
   const [tab, setTab] = useState<Tab>("rank");
   const [period, setPeriod] = useState<RankingPeriod>("week");
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
@@ -90,26 +83,6 @@ export function LunchMap() {
   const [walkDraft, setWalkDraft] = useState<string[]>([]);
   const [walkMaxMinutes, setWalkMaxMinutes] = useState<30 | 45 | null>(null);
   const [walkPath, setWalkPath] = useState<WalkPathState | null>(null);
-  const queue = useRef(new Map<string, Promise<unknown>>());
-
-  const reload = useCallback(async () => {
-    try {
-      const [data, tips] = await Promise.all([api.places(), api.recentTips()]);
-      setPlaces(data.places);
-      setMyVotes(data.myVotes);
-      setMyKeywords(data.myKeywords);
-      setRecentTips(tips.tips);
-      setLoadError(null);
-    } catch (e) {
-      setLoadError((e as Error).message);
-    }
-  }, []);
-
-  useEffect(() => {
-    // 마운트 시 한 번 불러온다
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void reload();
-  }, [reload]);
 
   useEffect(() => {
     // 마운트 시 산책 장소·코스를 불러오고, 이 브라우저에 기억해 둔 내 코스를 연다 (localStorage는 서버 렌더 때 읽을 수 없다)
@@ -272,46 +245,6 @@ export function LunchMap() {
   }, []);
   const setPlaceTab = (t: PlaceTab | undefined) => setMode((m) => (m.kind === "detail" ? { ...m, tab: t } : m));
 
-  // 같은 가게에 연달아 누르면 요청이 순서대로 가도록 이어 붙인다
-  const enqueue = (key: string, fn: () => Promise<unknown>) => {
-    const next = (queue.current.get(key) ?? Promise.resolve()).then(fn).catch(() => reload());
-    queue.current.set(key, next);
-  };
-
-  const vote = (placeId: string, value: MyVote) => {
-    const prev = myVotes[placeId] ?? 0;
-    const next: MyVote = prev === value ? 0 : value;
-    setMyVotes((v) => ({ ...v, [placeId]: next }));
-    setPlaces((ps) =>
-      (ps ?? []).map((p) =>
-        p.id !== placeId
-          ? p
-          : { ...p, likes: p.likes - (prev === 1 ? 1 : 0) + (next === 1 ? 1 : 0), dislikes: p.dislikes - (prev === -1 ? 1 : 0) + (next === -1 ? 1 : 0) },
-      ),
-    );
-    enqueue(`vote:${placeId}`, () => api.vote(placeId, next));
-  };
-
-  const setKeywords = (placeId: string, next: KeywordKey[]) => {
-    const prev = myKeywords[placeId] ?? [];
-    setMyKeywords((m) => ({ ...m, [placeId]: next }));
-    setPlaces((ps) =>
-      (ps ?? []).map((p) => {
-        if (p.id !== placeId) return p;
-        const keywords = { ...p.keywords };
-        for (const k of prev) keywords[k] = (keywords[k] ?? 1) - 1;
-        for (const k of next) keywords[k] = (keywords[k] ?? 0) + 1;
-        return { ...p, keywords };
-      }),
-    );
-    enqueue(`kw:${placeId}`, () => api.setKeywords(placeId, next));
-  };
-
-  const onTipAdded = (tip: Tip) => {
-    setRecentTips((ts) => [tip, ...(ts ?? [])]);
-    setPlaces((ps) => (ps ?? []).map((p) => (p.id === tip.place_id ? { ...p, tip_count: p.tip_count + 1 } : p)));
-  };
-
   // 🎲 오늘 뭐 먹지: 목록 탭에서 필터를 걸었으면 그 안에서 고른다
   const pool = tab === "list" ? listed : all;
   const roll = () => {
@@ -344,7 +277,7 @@ export function LunchMap() {
       <NaverPlacePanel name={selected.name} naverPlaceId={selected.naver_place_id} tab={placeTab} onTab={setPlaceTab} onClose={() => setPlaceTab(undefined)} />
     ) : null;
 
-  const rank = selected ? rankPlaces(all, period === "week" && all.every((p) => p.weekly_score === 0) ? "all" : period).findIndex((p) => p.id === selected.id) + 1 : 0;
+  const rank = selected ? ranking(all, period).ranked.findIndex((p) => p.id === selected.id) + 1 : 0;
 
   const panel = (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
@@ -433,7 +366,7 @@ export function LunchMap() {
             onVote={(v) => vote(selected.id, v)}
             onKeywords={(k) => setKeywords(selected.id, k)}
             onBack={() => setMode({ kind: "browse" })}
-            onTipAdded={onTipAdded}
+            onTipAdded={addTip}
             openTab={placeTab}
             onOpenTab={(t) => setPlaceTab(t)}
             drawTeams={(teams ?? []).filter((t) => acceptsEntries(t.open_box))}

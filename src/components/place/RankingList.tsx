@@ -1,6 +1,6 @@
 "use client";
 
-import { rankPlaces, type Place, type RankingPeriod } from "@/lib/domain";
+import { ranking, type Place, type RankingPeriod } from "@/lib/domain";
 import { CategoryDot, Walking } from "@/components/place/PlaceList";
 
 type Props = {
@@ -12,9 +12,7 @@ type Props = {
 
 // 랭킹: "이번 주"는 최근 7일 좋아요·꿀팁, "전체"는 좋아요 − 싫어요. 이번 주 기록이 없으면 전체를 보여 준다.
 export function RankingList({ places, period, onPeriod, onSelect }: Props) {
-  const weekEmpty = places.every((p) => p.weekly_score === 0);
-  const effective: RankingPeriod = period === "week" && weekEmpty ? "all" : period;
-  const ranked = rankPlaces(places, effective);
+  const { ranked, fellBack } = ranking(places, period);
 
   return (
     <ol className="px-3 pb-28">
@@ -31,7 +29,7 @@ export function RankingList({ places, period, onPeriod, onSelect }: Props) {
             </button>
           ))}
         </div>
-        {period === "week" && weekEmpty && <span className="text-[11px] text-muted">이번 주 기록이 없어 전체 순위를 보여 줘요</span>}
+        {fellBack && <span className="text-[11px] text-muted">이번 주 기록이 없어 전체 순위를 보여 줘요</span>}
       </li>
       {ranked.map((p, i) => (
         <li key={p.id}>
