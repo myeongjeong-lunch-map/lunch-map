@@ -105,6 +105,19 @@ npm run dev                  # http://localhost:3000
 DB를 바꾸는 PR은 개발 DB에 먼저 적용하고, 운영 DB에는 `master`에 머지하기 **전에** 적용한다.
 Vercel Hobby 플랜은 프로젝트 주인이 아닌 사람의 커밋을 Git 연동으로 배포하지 못해서, 주인 계정 토큰(`VERCEL_TOKEN` Secret)으로 CLI 배포를 한다.
 
+## 개발용 MCP (Claude Code)
+
+저장소의 [.mcp.json](.mcp.json)에 개발용 MCP 두 개가 들어 있다. Claude Code로 이 폴더를 열면 쓸지 묻는다. 키는 파일에 없고, 처음 한 번 `/mcp`에서 서버를 골라 **Authenticate**로 내 계정에 로그인한다.
+
+| 이름 | 하는 일 | 범위 |
+|---|---|---|
+| `supabase-dev` | 개발 DB 테이블·데이터 조회, 마이그레이션 확인 | 개발 DB(`lunch-map-dev`)만, **읽기 전용** |
+| `vercel` | 배포 상태·로그 확인, 문서 검색 | 로그인한 Vercel 계정의 권한 그대로 |
+
+- 운영 DB는 MCP에 연결하지 않는다. 운영 DB 변경은 지금처럼 사람이 SQL Editor에서 확인하고 실행한다.
+- `supabase-dev`는 개발 DB 프로젝트가 있는 Supabase 조직의 멤버여야 보인다.
+- `vercel`은 Vercel 프로젝트에 접근 권한이 있는 계정이어야 배포 정보가 보인다 (Hobby 플랜은 팀원을 초대할 수 없어 지금은 프로젝트 주인만).
+
 ## 브랜치
 
 - `master` — 운영 서비스 코드. 머지하면 https://myeongjeong-lunch-map.vercel.app 에 배포된다
