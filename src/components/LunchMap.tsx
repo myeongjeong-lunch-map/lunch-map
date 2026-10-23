@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api, loadWalkDraft, saveWalkDraft, type WalkResponse } from "@/lib/api";
+import { acceptsEntries } from "@/lib/drawBox";
 import {
   CAMPUS,
   MAX_COURSE_STOPS,
@@ -435,7 +436,7 @@ export function LunchMap() {
             onTipAdded={onTipAdded}
             openTab={placeTab}
             onOpenTab={(t) => setPlaceTab(t)}
-            drawTeams={(teams ?? []).filter((t) => t.open_box && !t.open_box.locked)}
+            drawTeams={(teams ?? []).filter((t) => acceptsEntries(t.open_box))}
             onAddToBox={(id) => addToBox(id, selected.id)}
           />
         ) : mode.kind === "course" ? (
