@@ -19,7 +19,13 @@ export async function GET(req: NextRequest) {
       else estimate++;
       const { error: uErr } = await db()
         .from("places")
-        .update({ walking_seconds: w.seconds, walking_meters: w.meters, walking_source: w.source, walking_updated_at: new Date().toISOString() })
+        .update({
+          walking_seconds: w.seconds,
+          walking_meters: w.meters,
+          walking_source: w.source,
+          walking_path: w.path,
+          walking_updated_at: new Date().toISOString(),
+        })
         .eq("id", p.id);
       if (uErr) throw uErr;
     }

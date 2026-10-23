@@ -136,6 +136,25 @@ body {
 .lm-marker.pick::after {
   border-top-color: var(--danger);
 }
+/* 선택한 가게까지의 경로 위에 띄우는 거리·도보 시간 칩 */
+.lm-route-chip {
+  transform: translate(-50%, -50%);
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--foreground);
+  color: var(--background);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  animation: lm-chip-in 0.4s 0.35s both;
+}
+@keyframes lm-chip-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -30%);
+  }
+}
 .lm-marker:hover {
   z-index: 20;
 }
