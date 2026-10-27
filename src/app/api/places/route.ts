@@ -38,9 +38,11 @@ export async function POST(req: NextRequest) {
       throw new HttpError(400, "캠퍼스 근처의 위치만 등록할 수 있어요.");
     }
     if (!isCategory(body.category)) throw new HttpError(400, "카테고리를 골라 주세요.");
-    const tipBody = cleanText(body.tip, 1000);
+    // 가 볼 곳은 아직 안 가 봤으므로 첫 꿀팁과 키워드를 받지 않는다
+    const toTry = body.toTry === true;
+    const tipBody = toTry ? null : cleanText(body.tip, 1000);
     const nickname = cleanText(body.nickname, 20);
-    const keywords = Array.isArray(body.keywords) ? [...new Set(body.keywords.filter(isKeyword))].slice(0, MAX_KEYWORDS_PER_PLACE) : [];
+    const keywords = !toTry && Array.isArray(body.keywords) ? [...new Set(body.keywords.filter(isKeyword))].slice(0, MAX_KEYWORDS_PER_PLACE) : [];
 
     const { data: existing } = await db().from("places").select("id").eq("name", name).eq("road_address", roadAddress).maybeSingle();
     if (existing) return NextResponse.json({ error: "이미 등록된 가게예요.", placeId: existing.id }, { status: 409 });
@@ -60,6 +62,7 @@ export async function POST(req: NextRequest) {
         category: body.category,
         naver_category: cleanText(body.naverCategory, 100),
         naver_place_id: naverPlaceId,
+        ...(toTry && { to_try: true }),
         ...walking,
       })
       .select("id")

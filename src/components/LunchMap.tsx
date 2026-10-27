@@ -222,7 +222,8 @@ export function LunchMap() {
   const setPlaceTab = (t: PlaceTab | undefined) => setMode((m) => (m.kind === "detail" ? { ...m, tab: t } : m));
 
   // 🎲 오늘 뭐 먹지: 후보를 담았으면 그 안에서, 아니면 목록 탭에서 필터를 걸었을 때 그 안에서 고른다
-  const pool = dice.picks.length ? dice.picks : tab === "list" ? listed : all;
+  // 후보로 직접 담은 가게는 그대로, 아니면 가 볼 곳은 빼고 뽑는다
+  const pool = dice.picks.length ? dice.picks : (tab === "list" ? listed : all).filter((p) => !p.to_try);
   const roll = () => {
     if (!pool.length || rolling) return;
     setRolling(true);

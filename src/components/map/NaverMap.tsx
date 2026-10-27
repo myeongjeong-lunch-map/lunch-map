@@ -222,7 +222,8 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
       const selected = p.id === selectedId;
       const ghost = halloween && isGhost(p);
       const emoji = halloween ? (ghost ? "👻" : "🎃") : CATEGORY_EMOJI[p.category];
-      const content = `<div class="lm-marker${selected ? " selected" : ""}${ghost ? " ghost" : ""}"><span class="emoji">${emoji}</span><span class="label">${escapeHtml(p.name)}</span></div>`;
+      const toTry = !halloween && p.to_try;
+      const content = `<div class="lm-marker${selected ? " selected" : ""}${ghost ? " ghost" : ""}${toTry ? " to-try" : ""}"><span class="emoji">${emoji}</span><span class="label">${escapeHtml(p.name)}</span></div>`;
       const existing = markers.current.get(p.id);
       if (existing) {
         existing.setIcon({ content });

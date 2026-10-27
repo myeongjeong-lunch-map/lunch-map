@@ -46,6 +46,7 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
   const [category, setCategory] = useState<Category | null>(null);
   const [keywords, setKeywords] = useState<KeywordKey[]>([]);
   const [tip, setTip] = useState("");
+  const [toTry, setToTry] = useState(false);
   const [nickname, setNickname] = useState(loadNickname);
   const [naverLink, setNaverLink] = useState("");
   const [website, setWebsite] = useState("");
@@ -116,7 +117,7 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
     setError(null);
     setDuplicateId(null);
     try {
-      const { id } = await api.addPlace({ ...draft, category, keywords, tip, nickname, naverLink, website });
+      const { id } = await api.addPlace({ ...draft, category, keywords, tip, toTry, nickname, naverLink, website });
       saveNickname(nickname);
       onDone(id);
     } catch (err) {
@@ -217,6 +218,14 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
             </button>
           </div>
 
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-dashed border-line p-3">
+            <input type="checkbox" checked={toTry} onChange={(e) => setToTry(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
+            <span>
+              <span className="block text-sm font-black">👀 아직 안 가 봤어요</span>
+              <span className="block text-xs text-muted">가 볼 곳으로 등록돼요. 누가 다녀와서 첫 꿀팁을 남기면 정식 맛집이 돼요.</span>
+            </span>
+          </label>
+
           <fieldset>
             <legend className="mb-2 text-sm font-black">카테고리</legend>
             <div className="flex flex-wrap gap-1.5">
@@ -228,41 +237,45 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
             </div>
           </fieldset>
 
-          <fieldset>
-            <legend className="mb-2 text-sm font-black">
-              이런 점이 좋았어요{" "}
-              <span className="font-normal text-muted">
-                (선택, {keywords.length}/{MAX_KEYWORDS_PER_PLACE})
-              </span>
-            </legend>
-            <div className="flex flex-wrap gap-1.5">
-              {KEYWORDS.map((k) => (
-                <Pill
-                  key={k.key}
-                  on={keywords.includes(k.key)}
-                  disabled={!keywords.includes(k.key) && keywords.length >= MAX_KEYWORDS_PER_PLACE}
-                  onClick={() => toggleKeyword(k.key)}
-                >
-                  {k.label}
-                </Pill>
-              ))}
-            </div>
-          </fieldset>
+          {!toTry && (
+            <fieldset>
+              <legend className="mb-2 text-sm font-black">
+                이런 점이 좋았어요{" "}
+                <span className="font-normal text-muted">
+                  (선택, {keywords.length}/{MAX_KEYWORDS_PER_PLACE})
+                </span>
+              </legend>
+              <div className="flex flex-wrap gap-1.5">
+                {KEYWORDS.map((k) => (
+                  <Pill
+                    key={k.key}
+                    on={keywords.includes(k.key)}
+                    disabled={!keywords.includes(k.key) && keywords.length >= MAX_KEYWORDS_PER_PLACE}
+                    onClick={() => toggleKeyword(k.key)}
+                  >
+                    {k.label}
+                  </Pill>
+                ))}
+              </div>
+            </fieldset>
+          )}
 
-          <div>
-            <label className="mb-2 block text-sm font-black" htmlFor="first-tip">
-              첫 꿀팁 <span className="font-normal text-muted">(선택)</span>
-            </label>
-            <textarea
-              id="first-tip"
-              value={tip}
-              onChange={(e) => setTip(e.target.value)}
-              maxLength={1000}
-              rows={3}
-              placeholder="추천 메뉴, 가격, 가는 길…"
-              className={`${field} resize-none`}
-            />
-          </div>
+          {!toTry && (
+            <div>
+              <label className="mb-2 block text-sm font-black" htmlFor="first-tip">
+                첫 꿀팁 <span className="font-normal text-muted">(선택)</span>
+              </label>
+              <textarea
+                id="first-tip"
+                value={tip}
+                onChange={(e) => setTip(e.target.value)}
+                maxLength={1000}
+                rows={3}
+                placeholder="추천 메뉴, 가격, 가는 길…"
+                className={`${field} resize-none`}
+              />
+            </div>
+          )}
           <div>
             <label className="mb-2 block text-sm font-black" htmlFor="naver-link">
               네이버 지도 공유 링크 <span className="font-normal text-muted">(선택)</span>
@@ -296,7 +309,7 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
             disabled={saving || !category || !draft.name.trim() || !draft.roadAddress.trim()}
             className="w-full rounded-2xl bg-brand py-3.5 text-[15px] font-black text-brand-ink disabled:opacity-40"
           >
-            {saving ? "등록 중… (도보 시간 계산 중)" : "등록하기"}
+            {saving ? "등록 중… (도보 시간 계산 중)" : toTry ? "가 볼 곳으로 등록하기" : "등록하기"}
           </button>
         </form>
       )}
