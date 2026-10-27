@@ -111,6 +111,11 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
+/** 장소 검색 결과 번호 핀 (①~⑤) */
+function candidateIcon(name: string, index: number, chosen: boolean): string {
+  return `<div class="lm-marker candidate${chosen ? " selected" : ""}"><span class="emoji num">${index + 1}</span><span class="label">${escapeHtml(name)}</span></div>`;
+}
+
 type Props = {
   places: Place[];
   /** 산책 탭에서 지도에 찍는 산책 장소 */
@@ -129,9 +134,16 @@ type Props = {
   onPick: (p: { lat: number; lng: number }) => void;
   /** 선택한 가게로 이동할 때 화면 아래쪽을 가리는 높이(px). 모바일 시트용 */
   bottomInset: number;
+  /** 가게 추가: 장소 검색 결과. 번호 핀 ①~⑤로 찍고, 그동안 등록된 가게 핀은 흐리게 한다 */
+  candidates?: { name: string; lat: number; lng: number }[] | null;
+  /** 고른 검색 결과 번호(0부터) */
+  chosenCandidate?: number | null;
+  onPickCandidate?: (index: number) => void;
+  /** 지도 아래쪽을 가리는 높이(px). 내 위치 버튼을 그 위에 둔다. 모바일 시트용 */
+  coveredBottom?: number;
 };
 
-export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, selectedId, halloween = false, onSelect, pickMode, picked, onPick, bottomInset }: Props) {
+export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, selectedId, halloween = false, onSelect, pickMode, picked, onPick, bottomInset, candidates = null, chosenCandidate = null, onPickCandidate, coveredBottom = 0 }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
@@ -139,10 +151,11 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const spotMarkers = useRef<Map<string, any>>(new Map());
-  const handlers = useRef({ onSelect, onSelectSpot, onPick, pickMode, bottomInset });
+  const candidateMarkers = useRef<any[]>([]);
+  const handlers = useRef({ onSelect, onSelectSpot, onPick, pickMode, bottomInset, onPickCandidate });
 
   useEffect(() => {
-    handlers.current = { onSelect, onSelectSpot, onPick, pickMode, bottomInset };
+    handlers.current = { onSelect, onSelectSpot, onPick, pickMode, bottomInset, onPickCandidate };
   });
 
   useEffect(() => {
@@ -154,7 +167,7 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
           center: new naver.maps.LatLng(CAMPUS.lat, CAMPUS.lng),
           zoom: 17,
           zoomControl: true,
-          zoomControlOptions: { position: naver.maps.Position.RIGHT_CENTER, style: naver.maps.ZoomControlStyle.SMALL },
+          zoomControlOptions: { position: naver.maps.Position.TOP_RIGHT, style: naver.maps.ZoomControlStyle.SMALL },
           scaleControl: false,
           mapDataControl: false,
         });
@@ -285,6 +298,127 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
     return drawRoute(naver, m, route.path, { dashed: route.dashed, chip: route.chip });
   }, [route, ready]);
 
+  // 장소 검색 결과 번호 핀
+  useEffect(() => {
+    const naver = window.naver;
+    if (!ready || !naver?.maps || !map.current) return;
+    for (const mk of candidateMarkers.current) mk.setMap(null);
+    candidateMarkers.current = [];
+    if (!candidates?.length) return;
+    candidates.forEach((c, i) => {
+      const pos = new naver.maps.LatLng(c.lat, c.lng);
+      const mk = new naver.maps.Marker({
+        map: map.current,
+        position: pos,
+        icon: { content: candidateIcon(c.name, i, false) },
+        zIndex: 150,
+      });
+      naver.maps.Event.addListener(mk, "click", () => handlers.current.onPickCandidate?.(i));
+      candidateMarkers.current.push(mk);
+    });
+  }, [candidates, ready]);
+
+  // 번호 핀이 모두 보이게 지도를 맞춘다. 모바일 시트 높이가 바뀌어도 다시 맞춘다 (고른 뒤에는 고른 핀으로 옮긴다)
+  useEffect(() => {
+    const naver = window.naver;
+    if (!ready || !naver?.maps || !map.current || !candidates?.length || chosenCandidate != null) return;
+    const m = map.current;
+    const bounds = new naver.maps.LatLngBounds();
+    for (const c of candidates) bounds.extend(new naver.maps.LatLng(c.lat, c.lng));
+    m.fitBounds(bounds, { top: 60, right: 50, bottom: 40 + bottomInset, left: 50 });
+    if (m.getZoom() > LABEL_ZOOM) m.setZoom(LABEL_ZOOM);
+  }, [candidates, chosenCandidate, bottomInset, ready]);
+
+  // 고른 번호 핀을 강조하고 그 자리로 옮긴다
+  useEffect(() => {
+    const naver = window.naver;
+    if (!ready || !naver?.maps || !map.current || !candidates) return;
+    candidateMarkers.current.forEach((mk, i) => {
+      mk.setIcon({ content: candidateIcon(candidates[i].name, i, i === chosenCandidate) });
+      mk.setZIndex(i === chosenCandidate ? 300 : 150);
+    });
+    if (chosenCandidate != null && candidates[chosenCandidate]) {
+      const c = candidates[chosenCandidate];
+      map.current.panTo(new naver.maps.LatLng(c.lat, c.lng));
+    }
+  }, [chosenCandidate, candidates, ready]);
+
+  // 내 위치 (GLOSSARY.md): 버튼을 눌렀을 때만 권한을 묻는다. 화면 표시용이고 서버로 보내지 않는다.
+  const me = useRef<{ watch: number | null; dot: any; circle: any; pos: any }>({ watch: null, dot: null, circle: null, pos: null });
+  const [locating, setLocating] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 3000);
+    return () => clearTimeout(t);
+  }, [notice]);
+  useEffect(() => {
+    const cur = me.current;
+    return () => {
+      if (cur.watch != null) navigator.geolocation.clearWatch(cur.watch);
+    };
+  }, []);
+
+  const showMe = () => {
+    const naver = window.naver;
+    const m = map.current;
+    if (!naver?.maps || !m) return;
+    const cur = me.current;
+    // 모바일 시트에 가리지 않게, 보이는 지도 영역의 가운데로 옮긴다
+    const centerAbove = (pos: any) => {
+      m.setCenter(pos);
+      if (coveredBottom) m.panBy(new naver.maps.Point(0, coveredBottom / 2));
+    };
+    // 이미 켜져 있으면 내 위치로 다시 옮기기만 한다
+    if (cur.watch != null) {
+      if (cur.pos) centerAbove(cur.pos);
+      return;
+    }
+    if (!("geolocation" in navigator)) {
+      setNotice("이 브라우저는 위치를 지원하지 않아요.");
+      return;
+    }
+    setLocating(true);
+    let first = true;
+    cur.watch = navigator.geolocation.watchPosition(
+      (p) => {
+        const pos = new naver.maps.LatLng(p.coords.latitude, p.coords.longitude);
+        cur.pos = pos;
+        if (!cur.dot) {
+          cur.circle = new naver.maps.Circle({
+            map: m,
+            center: pos,
+            radius: p.coords.accuracy,
+            fillColor: "#4285f4",
+            fillOpacity: 0.15,
+            strokeColor: "#4285f4",
+            strokeOpacity: 0.35,
+            strokeWeight: 1,
+            clickable: false,
+          });
+          cur.dot = new naver.maps.Marker({ map: m, position: pos, icon: { content: `<div class="lm-me"></div>`, anchor: new naver.maps.Point(9, 9) }, zIndex: 400, clickable: false });
+        } else {
+          cur.dot.setPosition(pos);
+          cur.circle.setCenter(pos);
+          cur.circle.setRadius(p.coords.accuracy);
+        }
+        // 처음 한 번만 내 위치로 옮기고, 그 뒤로는 점만 따라 움직인다
+        if (first) {
+          first = false;
+          setLocating(false);
+          centerAbove(pos);
+        }
+      },
+      (err) => {
+        if (cur.watch != null) navigator.geolocation.clearWatch(cur.watch);
+        cur.watch = null;
+        setLocating(false);
+        setNotice(err.code === err.PERMISSION_DENIED ? "위치 권한이 꺼져 있어요. 브라우저 설정에서 허용해 주세요." : "위치를 찾지 못했어요. 잠시 뒤 다시 눌러 주세요.");
+      },
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000 },
+    );
+  };
+
   // 핀 직접 꽂기 마커
   useEffect(() => {
     const naver = window.naver;
@@ -309,8 +443,28 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
 
   return (
     <div className="absolute inset-0">
-      <div ref={el} className={`h-full w-full ${pickMode ? "cursor-crosshair" : ""}`} />
+      <div ref={el} className={`h-full w-full ${pickMode ? "cursor-crosshair" : ""} ${candidates?.length ? "lm-dim-places" : ""}`} />
       {error && <div className="absolute inset-0 grid place-items-center bg-surface p-6 text-center text-sm text-muted">{error}</div>}
+      {ready && (
+        <button
+          type="button"
+          onClick={showMe}
+          aria-label="내 위치"
+          title="내 위치"
+          className="absolute right-3 z-10 grid h-11 w-11 place-items-center rounded-full bg-background text-lg shadow-[0_2px_10px_rgba(0,0,0,0.3)] transition-[bottom] duration-200"
+          style={{ bottom: coveredBottom + 16 }}
+        >
+          <span className={locating ? "animate-pulse" : ""}>📍</span>
+        </button>
+      )}
+      {notice && (
+        <div
+          className="pointer-events-none absolute left-1/2 z-10 w-max max-w-[90%] -translate-x-1/2 rounded-full bg-black/80 px-4 py-2 text-center text-sm font-semibold text-white shadow"
+          style={{ bottom: coveredBottom + 72 }}
+        >
+          {notice}
+        </div>
+      )}
       {pickMode && (
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow">
           지도에서 가게 위치를 눌러 주세요

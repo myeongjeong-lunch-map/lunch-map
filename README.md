@@ -65,6 +65,28 @@ npm run dev                  # http://localhost:3000
 2. **내 키로 따로 쓰기** — `.env.example`의 주석대로 각 서비스에서 무료로 발급받고, 새 Supabase 프로젝트에 `supabase/migrations/`를 순서대로 실행한다.
    네이버 지도 허용 URL에 `http://localhost:3000`을 넣어야 지도가 뜬다.
 
+## Claude에 점심 지도 연결하기 (MCP)
+
+점심 지도는 MCP 서버(`/api/mcp`, 읽기 전용, 인증 없음)를 연다. 연결하면 Claude에게 "10분 안에 갈 수 있는 국밥집 추천해 줘"처럼 물어볼 수 있다.
+
+- **Claude Code**
+  ```bash
+  claude mcp add --transport http lunch-map https://myeongjeong-lunch-map.vercel.app/api/mcp
+  ```
+- **Claude 앱 · claude.ai**: 설정 → 커넥터 → 사용자 지정 커넥터 추가 → URL에 `https://myeongjeong-lunch-map.vercel.app/api/mcp`
+- dev 서버는 `https://myeongjeong-lunch-map-dev.vercel.app/api/mcp`
+
+| 도구 | 하는 일 |
+|---|---|
+| `search_places` | 이름·카테고리·키워드·최대 도보 분으로 가게 찾기 |
+| `get_place` | 가게 하나의 주소·도보 시간·평가·키워드·최근 꿀팁·네이버 지도 링크 |
+| `get_ranking` | 랭킹 (이번 주 / 전체) |
+| `pick_lunch` | 오늘 뭐 먹지: 조건 안에서 무작위 한 곳 |
+| `get_team_box` | 팀의 열린 추첨통: 가게·넣은 횟수·확률·넣은 사람 |
+| `list_walk_courses` | 추천 산책 코스와 코스 시간 |
+
+도구는 [src/lib/server/mcpTools.ts](src/lib/server/mcpTools.ts)에 있다. 쓰기 도구(꿀팁·평가·추첨통 넣기)는 아직 없다.
+
 ## 기여하기
 
 1. 이슈를 만들거나 기존 이슈에 손을 든다.
@@ -82,6 +104,30 @@ npm run dev                  # http://localhost:3000
 `master`에 머지되면 GitHub Actions([.github/workflows/deploy.yml](.github/workflows/deploy.yml))가 타입 검사·린트 후 Vercel 운영 환경에 자동 배포한다.
 DB를 바꾸는 PR은 개발 DB에 먼저 적용하고, 운영 DB에는 `master`에 머지하기 **전에** 적용한다.
 Vercel Hobby 플랜은 프로젝트 주인이 아닌 사람의 커밋을 Git 연동으로 배포하지 못해서, 주인 계정 토큰(`VERCEL_TOKEN` Secret)으로 CLI 배포를 한다.
+
+## 개발용 MCP (Claude Code)
+
+저장소의 [.mcp.json](.mcp.json)에 개발용 MCP 두 개가 들어 있다. Claude Code로 이 폴더를 열면 쓸지 묻는다. 키는 파일에 없고, 처음 한 번 `/mcp`에서 서버를 골라 **Authenticate**로 내 계정에 로그인한다.
+
+| 이름 | 하는 일 | 범위 |
+|---|---|---|
+| `supabase-dev` | 개발 DB 테이블·데이터 조회, 마이그레이션 확인 | 개발 DB(`lunch-map-dev`)만, **읽기 전용** |
+| `vercel` | 배포 상태·로그 확인, 문서 검색 | 로그인한 Vercel 계정의 권한 그대로 |
+
+- 운영 DB는 MCP에 연결하지 않는다. 운영 DB 변경은 지금처럼 사람이 SQL Editor에서 확인하고 실행한다.
+- `supabase-dev`는 개발 DB 프로젝트가 있는 Supabase 조직의 멤버여야 보인다.
+- `vercel`은 Vercel 프로젝트에 접근 권한이 있는 계정이어야 배포 정보가 보인다 (Hobby 플랜은 팀원을 초대할 수 없어 지금은 프로젝트 주인만).
+
+## 버전
+
+[SemVer](https://semver.org/lang/ko/) `v주.부.수`를 쓴다. **운영 반영(`dev` → `master` 머지) 한 번이 버전 하나**다.
+
+- `master`에 머지되면 [release.yml](.github/workflows/release.yml)이 지난 태그 이후 들어온 PR 브랜치 이름을 보고 다음 버전을 정해 태그와 [GitHub Release](https://github.com/myeongjeong-lunch-map/lunch-map/releases)를 만든다
+  - `feat/…` PR이 하나라도 있으면 **부** (v1.1.0 → v1.2.0)
+  - `fix/…` 등 그 밖의 PR만 있으면 **수** (v1.1.0 → v1.1.1)
+  - **주**는 `dev` → `master` 릴리스 PR에 `release:major` 라벨을 붙였을 때만 (v1.1.0 → v2.0.0)
+- 변경 기록은 GitHub Releases가 전부다. 릴리스 노트는 PR 제목으로 채워지니 PR 제목을 알아보기 쉽게 쓴다
+- `package.json`의 `version`은 쓰지 않는다. 버전의 기준은 태그다
 
 ## 브랜치
 
