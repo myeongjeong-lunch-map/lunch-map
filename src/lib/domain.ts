@@ -555,3 +555,20 @@ export function drawWeights(entries: Pick<DrawEntry, "place_id">[]): { place_id:
   for (const e of entries) m.set(e.place_id, (m.get(e.place_id) ?? 0) + 1);
   return [...m].map(([place_id, weight]) => ({ place_id, weight })).sort((a, b) => b.weight - a.weight);
 }
+
+// 길거리 제보 (GLOSSARY.md: 길거리 제보, 제보 종류, 노점, 노점 확인, docs/adr/0007)
+export const STALL_KINDS = [
+  { key: "bungeoppang", label: "붕어빵" },
+  { key: "hotteok", label: "호떡" },
+  { key: "goguma", label: "군고구마" },
+  { key: "gunbam", label: "군밤" },
+  { key: "eomuk", label: "어묵·떡볶이" },
+  { key: "truck", label: "푸드트럭" },
+  { key: "etc", label: "기타" },
+] as const;
+export type StallKind = (typeof STALL_KINDS)[number]["key"];
+export const STALL_KIND_LABEL = Object.fromEntries(STALL_KINDS.map((k) => [k.key, k.label])) as Record<StallKind, string>;
+
+export function isStallKind(v: unknown): v is StallKind {
+  return STALL_KINDS.some((k) => k.key === v);
+}

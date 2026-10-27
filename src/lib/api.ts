@@ -1,3 +1,4 @@
+import type { StallCheckValue, StreetStall } from "./street";
 import type { DrawAnimation, DrawLimit, DrawResult, KeywordKey, LunchMode, MyVote, Place, PlaceLeg, TeamDetail, TeamSummary, Tip, WalkCourse, WalkLeg, WalkSpot } from "./domain";
 
 export class ApiError extends Error {
@@ -64,6 +65,11 @@ export const api = {
   removeEntry: (id: string, placeId: string) => request<{ ok: true }>(`/api/teams/${id}/box/entries`, { method: "DELETE", body: JSON.stringify({ placeId }) }),
   draw: (id: string, animation: DrawAnimation) => request<{ result: DrawResult }>(`/api/teams/${id}/box/draw`, { method: "POST", body: JSON.stringify({ animation }) }),
   decide: (id: string) => request<{ ok: true }>(`/api/teams/${id}/box/decide`, { method: "POST" }),
+  street: () => request<{ stalls: StreetStall[] }>("/api/street"),
+  reportStall: (body: Record<string, unknown>) => request<{ id: string }>("/api/street", { method: "POST", body: JSON.stringify(body) }),
+  checkStall: (id: string, value: StallCheckValue | null) => request<{ ok: true }>(`/api/street/${id}/check`, { method: "PUT", body: JSON.stringify({ value }) }),
+  fixStall: (id: string) => request<{ ok: true }>(`/api/street/${id}`, { method: "PATCH", body: JSON.stringify({ fixed: true, website: "" }) }),
+  adminRemoveStall: (id: string) => request<{ ok: true }>(`/api/admin/street/${id}`, { method: "DELETE" }),
 };
 
 const NICKNAME_KEY = "lm_nickname";

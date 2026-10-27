@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { CAMPUS, WALK_KIND_EMOJI, type Place, type WalkSpot } from "@/lib/domain";
 import { CATEGORY_EMOJI } from "@/components/place/categoryStyle";
 import { isGhost } from "@/lib/halloween";
+import { STALL_KIND_LABEL } from "@/lib/domain";
+import type { StreetStall } from "@/lib/street";
+import { stallIconSvg } from "@/components/street/stallIcons";
+import { stallStatus } from "@/components/street/StreetPanels";
 import type { RouteLine } from "@/components/map/routeLine";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- 네이버 지도 JS SDK는 타입 정의를 제공하지 않는다 */
@@ -139,11 +143,15 @@ type Props = {
   /** 고른 검색 결과 번호(0부터) */
   chosenCandidate?: number | null;
   onPickCandidate?: (index: number) => void;
+  /** 길거리 제보: 지금 보이는 노점. 가게 핀과 다른 말풍선으로 그린다 */
+  stalls?: StreetStall[];
+  selectedStallId?: string | null;
+  onSelectStall?: (id: string) => void;
   /** 지도 아래쪽을 가리는 높이(px). 내 위치 버튼을 그 위에 둔다. 모바일 시트용 */
   coveredBottom?: number;
 };
 
-export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, selectedId, halloween = false, onSelect, pickMode, picked, onPick, bottomInset, candidates = null, chosenCandidate = null, onPickCandidate, coveredBottom = 0 }: Props) {
+export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, selectedId, halloween = false, onSelect, pickMode, picked, onPick, bottomInset, candidates = null, chosenCandidate = null, onPickCandidate, coveredBottom = 0, stalls = [], selectedStallId = null, onSelectStall }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
@@ -151,11 +159,12 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const spotMarkers = useRef<Map<string, any>>(new Map());
+  const stallMarkers = useRef<Map<string, any>>(new Map());
   const candidateMarkers = useRef<any[]>([]);
-  const handlers = useRef({ onSelect, onSelectSpot, onPick, pickMode, bottomInset, onPickCandidate });
+  const handlers = useRef({ onSelect, onSelectSpot, onPick, pickMode, bottomInset, onPickCandidate, onSelectStall });
 
   useEffect(() => {
-    handlers.current = { onSelect, onSelectSpot, onPick, pickMode, bottomInset, onPickCandidate };
+    handlers.current = { onSelect, onSelectSpot, onPick, pickMode, bottomInset, onPickCandidate, onSelectStall };
   });
 
   useEffect(() => {
@@ -297,6 +306,48 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
     if (!route.path || route.path.length < 2) return;
     return drawRoute(naver, m, route.path, { dashed: route.dashed, chip: route.chip });
   }, [route, ready]);
+
+  // 길거리 제보 노점 핀. 고정 노점은 오늘 연 것만 진하게, 아직 확인 없거나 닫았으면 흐리게
+  useEffect(() => {
+    const naver = window.naver;
+    if (!ready || !naver?.maps || !map.current) return;
+    const seen = new Set<string>();
+    for (const s of stalls) {
+      seen.add(s.id);
+      const selected = s.id === selectedStallId;
+      const dim = s.fixed && s.today !== "open";
+      const content = `<div class="lm-stall${selected ? " selected" : ""}${dim ? " dim" : ""}">${stallIconSvg(s.kind, 22)}<span class="label">${escapeHtml(
+        s.memo || STALL_KIND_LABEL[s.kind],
+      )}</span><span class="age">${escapeHtml(stallStatus(s))}</span></div>`;
+      const existing = stallMarkers.current.get(s.id);
+      if (existing) {
+        existing.setIcon({ content });
+        existing.setPosition(new naver.maps.LatLng(s.lat, s.lng));
+        existing.setZIndex(selected ? 120 : 60);
+      } else {
+        const mk = new naver.maps.Marker({ map: map.current, position: new naver.maps.LatLng(s.lat, s.lng), icon: { content }, zIndex: selected ? 120 : 60 });
+        naver.maps.Event.addListener(mk, "click", () => handlers.current.onSelectStall?.(s.id));
+        stallMarkers.current.set(s.id, mk);
+      }
+    }
+    for (const [id, mk] of stallMarkers.current) {
+      if (!seen.has(id)) {
+        mk.setMap(null);
+        stallMarkers.current.delete(id);
+      }
+    }
+  }, [stalls, selectedStallId, ready]);
+
+  // 고른 노점으로 지도를 옮긴다 (모바일 시트에 가리지 않게 위로)
+  useEffect(() => {
+    const naver = window.naver;
+    if (!ready || !naver?.maps || !map.current || !selectedStallId) return;
+    const s = stalls.find((x) => x.id === selectedStallId);
+    if (!s) return;
+    map.current.setCenter(new naver.maps.LatLng(s.lat, s.lng));
+    if (handlers.current.bottomInset) map.current.panBy(new naver.maps.Point(0, handlers.current.bottomInset / 2));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStallId, ready]);
 
   // 장소 검색 결과 번호 핀
   useEffect(() => {
