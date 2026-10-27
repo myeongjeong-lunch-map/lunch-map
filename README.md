@@ -5,13 +5,57 @@
 
 **https://myeongjeong-lunch-map.vercel.app**
 
-- 🏆 랭킹(이번 주 / 전체), 📍 목록(카테고리·키워드·도보 시간 필터), 💡 꿀팁 피드
-- 🚶 산책 — 근처 공원·예술의전당 추천 코스와 내 코스, 코스 시간(걷기 + 둘러보기), 점심 코스(먹고 걷기·포장해서 먹기, 14시 전 복귀)
-- 🎲 오늘 뭐 먹지? — 지금 필터 안에서 한 곳을 골라 준다
-- 🎟️ 추첨 — 팀 추첨통에 가게를 넣고(많이 넣을수록 잘 뽑힘) 조장이 경주·플링코로 추첨한다
-- 가게 카드: 좋아요·싫어요, 키워드(최대 5개), 꿀팁, 네이버 플레이스 메뉴판·사진·리뷰
-- 로그인 없이 누구나 가게 추가 (네이버 장소 검색 또는 지도에 핀 꽂기)
-- 도보 시간은 TMAP 실제 보행 경로, PC·모바일, 라이트·다크 모드
+로그인 없이 링크만 있으면 누구나 보고, 가게와 꿀팁을 더할 수 있다. 용어는 [GLOSSARY.md](GLOSSARY.md)를 따른다.
+
+## 기능
+
+### 지도와 화면
+- **네이버 지도** 위에 등록된 가게를 카테고리 이모지 핀으로 보여 준다. 캠퍼스(🏫)가 기준점이고, 충분히 확대하면 가게 이름표가 보인다
+- **PC**: 왼쪽 패널 + 지도. **모바일**: 지도 + 아래에서 올라오는 시트 (작게 · 반 · 전체). 시트는 손잡이뿐 아니라 헤더·목록 어디를 잡아도 끌리고, 목록 스크롤과 이어진다
+- **📍 내 위치**: 지도 오른쪽 아래 버튼을 누르면 권한을 묻고 파란 점과 정확도 원으로 보여 준다. 화면 표시용이고 서버로 보내지 않는다
+- **라이트·다크 모드**: 기기 설정을 따르고, 🌙/☀️ 버튼으로 바꾼다
+- **도보 시간**: 캠퍼스에서 걸어가는 시간·거리를 TMAP 실제 보행 경로로 매일 다시 계산한다 ([ADR 0001](docs/adr/0001-walking-time-daily-refresh.md)). 가게를 고르면 지도에 캠퍼스 → 가게 보행 경로선이 그려진다
+
+### 탭
+| 탭 | 하는 일 |
+|---|---|
+| 🏆 랭킹 | **이번 주**(최근 7일 좋아요 × 2 + 꿀팁) / **전체**(좋아요 − 싫어요). 이번 주 기록이 없으면 전체를 보여 준다 |
+| 📍 목록 | 카테고리(여러 개 중 하나라도), 키워드(모두 가진 가게), 최대 도보 시간, 이름으로 거른다 |
+| 💡 꿀팁 | 모든 가게의 최근 꿀팁 피드. 누르면 그 가게로 간다 |
+| 🎟️ 추첨 | 팀 추첨 (아래) |
+| 🚶 산책 | 산책 장소·추천 코스·내 코스·점심 코스 (아래) |
+
+### 가게
+- **가게 카드**: 카테고리·도보 시간·주소, 👍 좋아요 / 👎 싫어요 (브라우저마다 가게당 하나, 바꾸거나 취소 가능)
+- **키워드**: 😋 맛있음 · 💸 가성비 · 🍚 양 많음 · ⚡ 빨리 나옴 · 🙋 혼밥 OK · 👥 단체 OK · 🕐 웨이팅 없음 · 🥡 포장 OK 중 브라우저마다 가게당 최대 5개. 고른 사람 수를 막대로 보여 준다
+- **꿀팁**: 추천 메뉴·가격·가는 길·웨이팅을 닉네임(선택)과 함께 남긴다
+- **📋 메뉴판 · 📷 사진 · ⭐ 리뷰**: 네이버 플레이스 페이지를 앱 안에 띄운다 ([ADR 0002](docs/adr/0002-menu-photos-via-embedded-naver-place.md)). 네이버와 연결되지 않은 가게는 새 창으로 연다
+- **가게 추가** (누구나): 네이버 장소 검색 결과를 지도에 번호 핀 ①~⑤로 보여 주고 골라서 등록한다. 검색에 없으면 지도에 핀을 직접 꽂는다. 이름 + 도로명 주소가 같으면 이미 등록된 가게로 안내한다. 카테고리·키워드·첫 꿀팁·네이버 지도 링크를 함께 넣을 수 있다
+
+### 오늘 뭐 먹지
+- **🎲 오늘 뭐 먹지?**: 지금 목록 필터 안에서 한 곳을 무작위로 고른다
+- **후보 담기**: 가게 카드에서 후보로 담아 두면 그 후보 안에서만 고른다 (이 브라우저에만 기억)
+
+### 🎟️ 추첨 (팀)
+- **팀**: 누구나 만들고 닉네임으로 들어간다. 초대 링크(`/?team=…`)로 바로 들어올 수 있다. 팀을 만든 사람이 **조장**
+- **추첨통**: 조장이 열고 한 사람이 넣을 수 있는 횟수(1~3번)를 정한다. 팀원이 가게를 넣고, 많이 넣은 가게일수록 잘 뽑힌다. 들어 있는 가게·넣은 횟수·확률·넣은 사람을 팀원 모두가 본다
+- **추첨 연출**: 🏇 경주 · 🎯 플링코 (할로윈 기간에는 🧙 마녀의 솥). 결과는 서버가 정한다 ([ADR 0004](docs/adr/0004-draw-result-decided-by-server.md))
+- **다시 뽑기 · 결정**: 마음에 안 들면 조장이 앞 회차에 뽑힌 가게를 빼고 다시 뽑는다. "이걸로 결정"을 누르면 추첨통이 닫히고 **추첨 기록**에 남는다
+
+### 🚶 산책
+- **산책 장소**: 예술의전당·국립국악원·서리풀공원 등 점심 뒤 걸어서 들를 곳
+- **추천 코스 · 내 코스**: 캠퍼스 → 장소들 → 캠퍼스. **코스 시간** = 구간별 걷는 시간(TMAP) + 둘러보는 시간 ([ADR 0005](docs/adr/0005-walk-course-time-from-daily-legs.md))
+- **점심 코스**: 가게 한 곳 + 산책 장소 한 곳. **먹고 걷기** / **포장해서 먹기**, 점심시간(12:50~14:00) 안에 돌아오는 것만, **복귀 시각**을 크게 보여 준다. 앱으로 **미리 주문**하는 가게는 기다리는 시간을 짧게 잡는다 ([ADR 0006](docs/adr/0006-place-legs-bounded-then-computed.md))
+
+### 관리자 (`/admin`)
+- `ADMIN_SECRET`으로 로그인해 가게 이름·카테고리·네이버 링크를 고치거나 가게·꿀팁을 지운다
+
+### 기간 이벤트
+- **🎃 할로윈 (10/23~10/30)**: 주황·보라 테마, 🎃 핀, Trick or Treat(오늘 뭐 먹지에 장난 미션), 👻 유령 가게 퇴치(이벤트 기간 꿀팁이 없는 가게), 🧙 마녀의 솥 추첨, 🎃 할로윈 랭킹. 날짜가 지나면 저절로 꺼진다
+
+### Claude와 함께 쓰기
+- **MCP 서버**: Claude에서 "10분 안에 갈 수 있는 국밥집 추천해 줘"처럼 묻는다 → [Claude에 점심 지도 연결하기](#claude에-점심-지도-연결하기-mcp)
+- **Claude Code mod**: `/lunch`로 옆 패널에 오늘 점심 추천과 이번 주 랭킹 → [Claude Code에 "오늘 점심" 패널 붙이기](#claude-code에-오늘-점심-패널-붙이기-mod)
 
 ## 먼저 읽을 것
 
@@ -36,6 +80,7 @@ src/
       walk/                  산책 장소·코스·구간·가게 구간, path·lunch-path(구간별 보행 경로)
       cron/walking/          매일 도보 시간 재계산 (Vercel Cron)
       cron/walk-legs/        매일 산책 구간·가게 구간 재계산 (Vercel Cron)
+      mcp/                   MCP 서버 (읽기 전용 도구 6개)
       admin/                 관리자 수정·삭제
   components/                LunchMap(전체 틀) + map/ place/ draw/ walk/ admin/ ui/ (기능별 폴더)
   lib/
@@ -43,6 +88,7 @@ src/
     server/                  Supabase, 네이버, TMAP, 쓰기 방어(허니팟·속도 제한), 쿠키
 supabase/migrations/         DB 스키마 (순서대로 적용)
 scripts/                     노션 데이터 옮기기, 플레이스 ID 채우기, Vercel 환경 변수 올리기
+claude-mod/lunch-today/      Claude Code "오늘 점심" 패널 mod (.claude-plugin/marketplace.json이 설치 목록)
 ```
 
 - **스택**: Next.js 16 (App Router) · Tailwind CSS 4 · Supabase(Postgres, 서울) · Vercel(서울 `icn1`)
@@ -67,14 +113,22 @@ npm run dev                  # http://localhost:3000
 
 ## Claude에 점심 지도 연결하기 (MCP)
 
-점심 지도는 MCP 서버(`/api/mcp`, 읽기 전용, 인증 없음)를 연다. 연결하면 Claude에게 "10분 안에 갈 수 있는 국밥집 추천해 줘"처럼 물어볼 수 있다.
+점심 지도는 MCP 서버(`/api/mcp`, Streamable HTTP, 읽기 전용, 인증 없음)를 연다. 연결하면 Claude에게 "10분 안에 갈 수 있는 국밥집 추천해 줘", "부캉팀 추첨통에 뭐 들어 있어?"처럼 물어볼 수 있다.
 
-- **Claude Code**
-  ```bash
-  claude mcp add --transport http lunch-map https://myeongjeong-lunch-map.vercel.app/api/mcp
-  ```
-- **Claude 앱 · claude.ai**: 설정 → 커넥터 → 사용자 지정 커넥터 추가 → URL에 `https://myeongjeong-lunch-map.vercel.app/api/mcp`
-- dev 서버는 `https://myeongjeong-lunch-map-dev.vercel.app/api/mcp`
+| 서버 | 주소 |
+|---|---|
+| 운영 | `https://myeongjeong-lunch-map.vercel.app/api/mcp` |
+| dev | `https://myeongjeong-lunch-map-dev.vercel.app/api/mcp` |
+
+**Claude Code** — 터미널에서 한 줄. `--scope user`를 붙이면 모든 프로젝트에서 쓴다.
+```bash
+claude mcp add --scope user --transport http lunch-map https://myeongjeong-lunch-map.vercel.app/api/mcp
+```
+`claude mcp list`에 `lunch-map … ✔ Connected`가 보이면 된다. 연결은 새로 여는 세션부터 쓸 수 있다.
+
+**Claude 앱 · claude.ai** — 설정 → 커넥터 → **사용자 지정 커넥터 추가** → 이름 `점심 지도`, URL에 운영 주소. 대화에서 커넥터를 켜고 물어본다. (사용자 지정 커넥터는 Pro·Max·Team·Enterprise 요금제에서 된다)
+
+**다른 MCP 클라이언트** — Streamable HTTP를 지원하면 위 주소를 그대로 넣는다. stdio만 되면 `npx -y mcp-remote <주소>`로 감싼다.
 
 | 도구 | 하는 일 |
 |---|---|
@@ -86,6 +140,33 @@ npm run dev                  # http://localhost:3000
 | `list_walk_courses` | 추천 산책 코스와 코스 시간 |
 
 도구는 [src/lib/server/mcpTools.ts](src/lib/server/mcpTools.ts)에 있다. 쓰기 도구(꿀팁·평가·추첨통 넣기)는 아직 없다.
+
+## Claude Code에 "오늘 점심" 패널 붙이기 (mod)
+
+[claude-mod/lunch-today](claude-mod/lunch-today)는 Claude Code 옆 패널에 **🍱 오늘 점심**을 띄우는 mod(플러그인)다. 위 MCP 서버에서 추천 한 곳과 이번 주 랭킹 3곳을 받아 보여 준다.
+
+**설치** — Claude Code 터미널 세션의 입력창에서:
+```
+/plugin install lunch-today --marketplace myeongjeong-lunch-map/lunch-map
+```
+`Add marketplace?`에 `y`, 범위는 **user**(Enter)를 고르면 `Installed lunch-today`가 뜨고 바로 켜진다.
+
+셸에서 한 줄로:
+```bash
+claude plugin install lunch-today --marketplace myeongjeong-lunch-map/lunch-map
+```
+
+데스크톱 앱(`/plugin`이 안 되는 곳): 입력창 옆 **+** → **Plugins** → **Add marketplace**에 `myeongjeong-lunch-map/lunch-map` → **Add plugin**에서 `lunch-today`.
+
+**쓰기**
+- `/lunch` — 패널을 열고 추천 한 곳 + 이번 주 랭킹을 보여 준다
+- `/lunch 한식 10분`, `/lunch 분식`, `/lunch 국밥` — 카테고리, 최대 도보 분, 이름 일부로 조건을 건다
+- 패널의 **🎲 다시 뽑기**(`r`), **조건 지우기**(`c`)
+
+**참고**
+- 위의 `lunch-map` MCP가 연결돼 있으면 그것으로 부르고, 없거나 막히면 같은 주소에 HTTP로 직접 요청한다. 그래서 MCP를 따로 연결하지 않아도 동작한다
+- mod를 고쳐 보려면 `claude --plugin-dir claude-mod/lunch-today`로 띄우면 저장할 때마다 다시 불러온다. 고친 뒤 `claude plugin validate claude-mod/lunch-today`로 확인한다
+- 업데이트: `claude plugin update lunch-today` 뒤 `/reload-plugins`
 
 ## 기여하기
 
