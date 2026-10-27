@@ -24,6 +24,8 @@ import { NaverPlacePanel } from "@/components/map/NaverPlacePanel";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { DrawTab } from "@/components/draw/DrawTab";
 import { useHalloween } from "@/components/ui/useHalloween";
+import { useStreetStalls } from "@/components/street/useStreetStalls";
+import { ReportStall, StallDetail, StreetBar, StreetList } from "@/components/street/StreetPanels";
 import { isGhost, TRICK_CHANCE, TRICKS, type Trick } from "@/lib/halloween";
 
 const DESKTOP_QUERY = "(min-width: 768px)";
@@ -54,7 +56,11 @@ type Mode =
   | { kind: "add" }
   | { kind: "spot"; id: string }
   | { kind: "course"; courseId: string | null }
-  | { kind: "lunch"; course: LunchCourse };
+  | { kind: "lunch"; course: LunchCourse }
+  // 길거리 제보: 지금 길거리 목록, 노점 하나, 제보하기
+  | { kind: "street" }
+  | { kind: "stall"; id: string }
+  | { kind: "report" };
 
 export function LunchMap() {
   const isDesktop = useIsDesktop();
@@ -75,6 +81,15 @@ export function LunchMap() {
   // 할로윈 Trick or Treat: 마지막으로 뽑은 가게와 그때 나온 트릭(없으면 트릿)
   const [rolled, setRolled] = useState<{ id: string; trick: Trick | null } | null>(null);
   const halloween = useHalloween();
+  const street = useStreetStalls();
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    // 관리자 쿠키가 있으면 노점 화면에 "내리기"를 보여 준다
+    api
+      .adminStatus()
+      .then((r) => setIsAdmin(r.admin))
+      .catch(() => setIsAdmin(false));
+  }, []);
   const period: RankingPeriod = pickedPeriod ?? (halloween ? "halloween" : "week");
   const [teams, setTeams] = useState<TeamSummary[] | null>(null);
   const [teamsError, setTeamsError] = useState<string | null>(null);
@@ -154,6 +169,24 @@ export function LunchMap() {
   const lunchRoute = useLunchRouteLine(openedLunch);
 
   const raiseSheet = () => setSnap((s) => (s === "peek" ? "half" : s));
+  // 가게 추가·길거리 제보를 쓰는 동안에는 위쪽 버튼(오늘 뭐 먹지 등)을 숨긴다
+  const editing = mode.kind === "add" || mode.kind === "report";
+  const openStall = (id: string) => {
+    setMode({ kind: "stall", id });
+    raiseSheet();
+  };
+  const startReport = () => {
+    setPicked(null);
+    setMode({ kind: "report" });
+    setSnap("full");
+  };
+  const endReport = (id?: string) => {
+    setPickMode(false);
+    setPicked(null);
+    if (id) openStall(id);
+    else setMode({ kind: "browse" });
+  };
+  const openedStall = mode.kind === "stall" ? (street.stalls?.find((x) => x.id === mode.id) ?? null) : null;
   const openSpot = (id: string) => {
     setMode({ kind: "spot", id });
     raiseSheet();
@@ -246,7 +279,7 @@ export function LunchMap() {
             <h1 className="text-xl font-black">명정 점심 지도</h1>
           </button>
           <div className="flex shrink-0 items-center gap-1.5">
-            {mode.kind !== "add" && (
+            {!editing && (
               <button onClick={startAdd} className="rounded-full border border-line px-3 py-1.5 text-xs font-bold hover:bg-surface">
                 + 맛집 추가
               </button>
@@ -254,7 +287,7 @@ export function LunchMap() {
             <ThemeToggle />
           </div>
         </div>
-        {mode.kind !== "add" && tab === "walk" && (
+        {!editing && tab === "walk" && (
           <div className="mt-3 flex items-center gap-2 rounded-2xl bg-surface px-3.5 py-3 text-sm">
             {walk.draftCourse.stops.length === 0 ? (
               <span className="text-muted">🚶 장소를 골라 내 코스를 짜 보세요</span>
@@ -274,7 +307,7 @@ export function LunchMap() {
             )}
           </div>
         )}
-        {mode.kind !== "add" && tab !== "walk" && (
+        {!editing && tab !== "walk" && (
           <button
             onClick={roll}
             disabled={!pool.length}
@@ -309,7 +342,7 @@ export function LunchMap() {
             </span>
           </button>
         )}
-        {mode.kind !== "add" && tab !== "walk" && dice.picks.length > 0 && (
+        {!editing && tab !== "walk" && dice.picks.length > 0 && (
           <div className="mt-2 flex items-center gap-2">
             <div className="no-scrollbar flex min-w-0 flex-1 gap-1.5 overflow-x-auto">
               {dice.picks.map((p) => (
@@ -327,6 +360,9 @@ export function LunchMap() {
               비우기
             </button>
           </div>
+        )}
+        {mode.kind === "browse" && tab !== "walk" && (
+          <StreetBar count={street.stalls?.length ?? 0} onOpen={() => setMode({ kind: "street" })} onReport={startReport} />
         )}
         {mode.kind === "browse" && (
           <div className="mt-3 grid grid-cols-5 rounded-xl bg-surface p-1 text-xs font-bold">
@@ -369,6 +405,31 @@ export function LunchMap() {
             }}
             mapChoice={mapChoice}
           />
+        ) : mode.kind === "report" ? (
+          <ReportStall
+            street={street}
+            picked={picked}
+            onStartPick={() => {
+              setPickMode(true);
+              setSnap("peek");
+            }}
+            onCancel={() => endReport()}
+            onDone={(id) => endReport(id)}
+            onOpenExisting={(id) => endReport(id)}
+          />
+        ) : mode.kind === "street" ? (
+          <StreetList street={street} onBack={() => setMode({ kind: "browse" })} onOpen={openStall} onReport={startReport} />
+        ) : mode.kind === "stall" ? (
+          openedStall ? (
+            <StallDetail key={openedStall.id} stall={openedStall} street={street} onBack={() => setMode({ kind: "street" })} isAdmin={isAdmin} />
+          ) : (
+            <div className="p-6 text-center text-sm text-muted">
+              <p>이 노점은 지금 지도에 없어요. 시간이 지났거나 내려갔어요.</p>
+              <button onClick={() => setMode({ kind: "street" })} className="mt-3 font-bold text-brand">
+                지금 길거리 보기
+              </button>
+            </div>
+          )
         ) : selected ? (
           <>
             {rolled?.id === selected.id && (
@@ -502,6 +563,9 @@ export function LunchMap() {
           candidates={mode.kind === "add" ? candidates : null}
           chosenCandidate={chosenCandidate}
           onPickCandidate={(index) => setMapChoice((c) => ({ index, n: (c?.n ?? 0) + 1 }))}
+          stalls={!openedLunch && tab !== "walk" && mode.kind !== "add" ? (street.stalls ?? []) : []}
+          selectedStallId={mode.kind === "stall" ? mode.id : null}
+          onSelectStall={openStall}
         />
         {!isDesktop && !pickMode && (
           <BottomSheet snap={snap} onSnap={setSnap}>

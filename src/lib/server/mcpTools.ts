@@ -1,7 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
+  CAMPUS,
   CATEGORIES,
+  haversine,
+  STALL_KIND_LABEL,
+  STALL_KINDS,
+  type StallKind,
   courseTime,
   drawCandidates,
   drawWeights,
@@ -19,10 +24,12 @@ import { db } from "@/lib/server/supabase";
 import { readPlaceList } from "@/lib/server/placeList";
 import { listTeams, teamDetail } from "@/lib/server/teamViews";
 import { readWalkData } from "@/lib/server/walkData";
+import { readStreetStalls } from "@/lib/server/street";
 
 // 점심 지도 MCP 도구. 모두 읽기 전용이다 (쓰기는 팀 토큰과 함께 다음 단계, 이슈 #21).
 // 결과는 Claude가 그대로 읽고 사람에게 옮기기 쉬운 짧은 한국어 글로 돌려준다.
 
+const STALL_KIND_KEYS = STALL_KINDS.map((k) => k.key) as [StallKind, ...StallKind[]];
 const KEYWORD_KEYS = KEYWORDS.map((k) => k.key) as [KeywordKey, ...KeywordKey[]];
 
 const filterShape = {
@@ -94,9 +101,18 @@ export function registerLunchTools(server: McpServer): void {
     async ({ id, name }) => {
       const all = await places();
       const key = name?.replace(/\s/g, "");
-      const p = id ? all.find((x) => x.id === id) : key ? (all.find((x) => x.name.replace(/\s/g, "") === key) ?? all.find((x) => x.name.replace(/\s/g, "").includes(key))) : undefined;
+      const p = id
+        ? all.find((x) => x.id === id)
+        : key
+          ? (all.find((x) => x.name.replace(/\s/g, "") === key) ?? all.find((x) => x.name.replace(/\s/g, "").includes(key)))
+          : undefined;
       if (!p) return text("가게를 찾지 못했어요. search_places로 먼저 찾아 보세요.");
-      const { data: tips, error } = await db().from("tips").select("body, nickname, created_at").eq("place_id", p.id).order("created_at", { ascending: false }).limit(5);
+      const { data: tips, error } = await db()
+        .from("tips")
+        .select("body, nickname, created_at")
+        .eq("place_id", p.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
       if (error) throw error;
       const min = walkingMinutes(p);
       const kw = topKeywords(p, 8);
@@ -126,7 +142,12 @@ export function registerLunchTools(server: McpServer): void {
     async ({ period, limit }) => {
       const r = ranking(await places(), period);
       const head = r.fellBack ? "이번 주 기록이 없어 전체 순위예요." : r.period === "week" ? "이번 주 랭킹" : "전체 랭킹";
-      return text(`${head}\n${r.ranked.slice(0, limit).map((p, i) => `${i + 1}. ${line(p).slice(2)}`).join("\n")}`);
+      return text(
+        `${head}\n${r.ranked
+          .slice(0, limit)
+          .map((p, i) => `${i + 1}. ${line(p).slice(2)}`)
+          .join("\n")}`,
+      );
     },
   );
 
@@ -172,8 +193,47 @@ export function registerLunchTools(server: McpServer): void {
           `${t.name} 추첨통 (한 사람 최대 ${box.per_member_limit}번)`,
           ...box.results.map((r) => `${r.round}차에 뽑힘: ${nameOf(r.place_id)}`),
           box.results.length ? "다음 추첨 후보 (뽑힌 가게 제외):" : "후보:",
-          ...candidates.map((c) => `- ${nameOf(c.place_id)} · 🎟️×${c.weight} · ${Math.round((c.weight / total) * 100)}% · 넣은 사람: ${[...(who.get(c.place_id) ?? [])].join(", ")}`),
+          ...candidates.map(
+            (c) =>
+              `- ${nameOf(c.place_id)} · 🎟️×${c.weight} · ${Math.round((c.weight / total) * 100)}% · 넣은 사람: ${[...(who.get(c.place_id) ?? [])].join(", ")}`,
+          ),
         ].join("\n"),
+      );
+    },
+  );
+
+  server.registerTool(
+    "list_street_stalls",
+    {
+      title: "지금 길거리 노점",
+      description:
+        "지금 지도에 보이는 길거리 제보(붕어빵·호떡·군고구마·군밤·어묵·떡볶이·푸드트럭 노점). 일일 노점은 몇 분 전에 확인됐는지, 고정 노점은 오늘 영업 여부. 종류로 거를 수 있다.",
+      inputSchema: z.object({
+        kind: z
+          .enum(STALL_KIND_KEYS)
+          .optional()
+          .describe(`종류: ${STALL_KINDS.map((k) => `${k.key}=${k.label}`).join(", ")}`),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ kind }) => {
+      const list = (await readStreetStalls(null)).filter((s) => !kind || s.kind === kind);
+      if (!list.length) return text(kind ? `지금 보이는 ${STALL_KIND_LABEL[kind]} 노점이 없어요.` : "지금 보이는 길거리 노점이 없어요.");
+      return text(
+        `지금 길거리 ${list.length}곳:\n` +
+          list
+            .map((s) => {
+              const min = Math.max(1, Math.round((haversine(CAMPUS.lat, CAMPUS.lng, s.lat, s.lng) * 1.3) / 66.7));
+              const state = !s.fixed
+                ? `일일 · ${timeAgo(s.last_seen_at)} 확인`
+                : s.today === "open"
+                  ? "고정 · 오늘 영업"
+                  : s.today === "closed"
+                    ? "고정 · 오늘 닫음"
+                    : `고정 · 마지막 확인 ${timeAgo(s.last_seen_at)}`;
+              return `- ${STALL_KIND_LABEL[s.kind]}${s.memo ? ` (${s.memo})` : ""} · ${state} · 캠퍼스에서 약 ${min}분 · https://map.naver.com/p/?c=${s.lng},${s.lat},18,0,0,0,dh`;
+            })
+            .join("\n"),
       );
     },
   );
