@@ -1,0 +1,10 @@
+{
+  "name": "lunch-today",
+  "version": "0.1.0",
+  "description": "명정 점심 지도(lunch-map MCP)에서 오늘 점심 추천과 이번 주 랭킹을 패널로 보여 준다",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "myeongjeong-lunch-map"
+  },
+  "license": "MIT"
+}

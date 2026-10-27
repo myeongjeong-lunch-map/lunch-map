@@ -1,0 +1,11 @@
+{
+  "name": "lunch-map",
+  "owner": { "name": "myeongjeong-lunch-map" },
+  "plugins": [
+    {
+      "name": "lunch-today",
+      "source": "./claude-mod/lunch-today",
+      "description": "Claude Code 옆 패널에 명정 점심 지도의 오늘 점심 추천과 이번 주 랭킹을 보여 준다 (/lunch)"
+    }
+  ]
+}
