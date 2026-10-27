@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CAMPUS, WALK_KIND_EMOJI, type Place, type WalkSpot } from "@/lib/domain";
 import { CATEGORY_EMOJI } from "@/components/place/categoryStyle";
 import { isGhost } from "@/lib/halloween";
-import { STALL_KIND_LABEL } from "@/lib/domain";
+import { stallKindsLabel } from "@/lib/domain";
 import type { StreetStall } from "@/lib/street";
 import { stallIconSvg } from "@/components/street/stallIcons";
 import { stallStatus } from "@/components/street/StreetPanels";
@@ -317,8 +317,8 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
       seen.add(s.id);
       const selected = s.id === selectedStallId;
       const dim = s.fixed && s.today !== "open";
-      const content = `<div class="lm-stall${selected ? " selected" : ""}${dim ? " dim" : ""}">${stallIconSvg(s.kind, 22)}<span class="label">${escapeHtml(
-        s.memo || STALL_KIND_LABEL[s.kind],
+      const content = `<div class="lm-stall${selected ? " selected" : ""}${dim ? " dim" : ""}">${stallIconSvg(s.kind, 22)}${s.kinds.length > 1 ? `<span class="more">+${s.kinds.length - 1}</span>` : ""}<span class="label">${escapeHtml(
+        s.memo || stallKindsLabel(s.kinds),
       )}</span><span class="age">${escapeHtml(stallStatus(s))}</span></div>`;
       const existing = stallMarkers.current.get(s.id);
       if (existing) {

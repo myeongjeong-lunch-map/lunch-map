@@ -1,7 +1,7 @@
 import { db } from "@/lib/server/supabase";
 import { FIXED_DAYS, viewStall, type CheckRow, type StallRow, type StreetStall } from "@/lib/street";
 
-const COLUMNS = "id, kind, memo, nickname, lat, lng, fixed, reporter_id, created_at, last_seen_at, removed_at";
+const COLUMNS = "id, kind, kinds, memo, nickname, lat, lng, fixed, reporter_id, created_at, last_seen_at, removed_at";
 
 /** 지금 지도에 보이는 노점. 화면(/api/street)과 MCP가 같이 쓴다. 최근 확인 순 */
 export async function readStreetStalls(me: string | null, now = Date.now()): Promise<StreetStall[]> {

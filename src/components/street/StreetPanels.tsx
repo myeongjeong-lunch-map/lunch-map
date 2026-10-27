@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { api, ApiError, loadNickname, saveNickname } from "@/lib/api";
-import { CAMPUS, haversine, STALL_KIND_LABEL, STALL_KINDS, timeAgo, type StallKind } from "@/lib/domain";
+import { CAMPUS, haversine, MAX_STALL_KINDS, STALL_KINDS, stallKindsLabel, timeAgo, type StallKind } from "@/lib/domain";
 import { DAILY_HOURS, FIXED_DAYS, type StallCheckValue, type StreetStall } from "@/lib/street";
 import { StallIcon } from "@/components/street/StallIcon";
 import type { StreetStallsModule } from "@/components/street/useStreetStalls";
@@ -80,7 +80,7 @@ export function StreetList({
               <StallIcon kind={s.kind} size={36} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-bold">
-                  {STALL_KIND_LABEL[s.kind]}
+                  {stallKindsLabel(s.kinds)}
                   {s.memo ? <span className="font-normal text-muted"> · {s.memo}</span> : null}
                 </span>
                 <span className="block text-xs text-muted">
@@ -129,7 +129,7 @@ export function StallDetail({ stall, street, onBack, isAdmin }: { stall: StreetS
         <StallIcon kind={stall.kind} size={56} />
         <div className="min-w-0">
           <p className="text-xs font-extrabold text-brand">{stall.fixed ? "고정 노점 · 매일 나오는 곳" : "일일 노점 · 오늘 본 곳"}</p>
-          <h2 className="text-2xl font-black leading-tight">{STALL_KIND_LABEL[stall.kind]}</h2>
+          <h2 className="text-2xl font-black leading-tight">{stallKindsLabel(stall.kinds)}</h2>
           <p className="text-sm text-muted">
             {stallStatus(stall)} · 🚶 약 {walkMinutes(stall)}분
           </p>
@@ -207,7 +207,9 @@ export function ReportStall({
   onDone: (id: string) => void;
   onOpenExisting: (id: string) => void;
 }) {
-  const [kind, setKind] = useState<StallKind | null>(null);
+  // 고른 순서대로. 처음 고른 것이 대표 종류(아이콘)다
+  const [kinds, setKinds] = useState<StallKind[]>([]);
+  const toggleKind = (k: StallKind) => setKinds((ks) => (ks.includes(k) ? ks.filter((x) => x !== k) : ks.length < MAX_STALL_KINDS ? [...ks, k] : ks));
   const [memo, setMemo] = useState("");
   const [nickname, setNickname] = useState(loadNickname);
   const [fixed, setFixed] = useState(false);
@@ -245,11 +247,11 @@ export function ReportStall({
   };
 
   const submit = async (force = false) => {
-    if (!kind || !spot) return;
+    if (!kinds.length || !spot) return;
     setSaving(true);
     setError(null);
     try {
-      const { id } = await api.reportStall({ kind, memo, nickname, fixed, lat: spot.lat, lng: spot.lng, website, force });
+      const { id } = await api.reportStall({ kinds, memo, nickname, fixed, lat: spot.lat, lng: spot.lng, website, force });
       saveNickname(nickname);
       await street.reload();
       onDone(id);
@@ -273,15 +275,24 @@ export function ReportStall({
       </div>
 
       <fieldset>
-        <legend className="mb-2 text-sm font-black">무엇을 봤나요?</legend>
+        <legend className="mb-2 text-sm font-black">
+          무엇을 봤나요? <span className="font-normal text-muted">(최대 {MAX_STALL_KINDS}개, 처음 고른 게 대표 아이콘)</span>
+        </legend>
         <div className="grid grid-cols-4 gap-2">
           {STALL_KINDS.map((k) => (
             <button
               key={k.key}
               type="button"
-              onClick={() => setKind(k.key)}
-              className={`flex flex-col items-center gap-1 rounded-xl border py-2 text-[11px] font-bold ${kind === k.key ? "border-brand bg-brand/15" : "border-line hover:bg-surface"}`}
+              onClick={() => toggleKind(k.key)}
+              disabled={!kinds.includes(k.key) && kinds.length >= MAX_STALL_KINDS}
+              aria-pressed={kinds.includes(k.key)}
+              className={`relative flex flex-col items-center gap-1 rounded-xl border py-2 text-[11px] font-bold disabled:opacity-35 ${kinds.includes(k.key) ? "border-brand bg-brand/15" : "border-line hover:bg-surface"}`}
             >
+              {kinds.includes(k.key) && (
+                <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-brand text-[10px] font-black text-brand-ink">
+                  {kinds.indexOf(k.key) + 1}
+                </span>
+              )}
               <StallIcon kind={k.key} size={30} />
               {k.label}
             </button>
@@ -344,7 +355,7 @@ export function ReportStall({
 
       {duplicateId && (
         <div className="rounded-xl border border-brand/50 bg-brand/10 p-3 text-sm">
-          <p className="font-bold">근처에 이미 {duplicate ? STALL_KIND_LABEL[duplicate.kind] : "같은"} 제보가 있어요. 이 노점인가요?</p>
+          <p className="font-bold">근처에 이미 {duplicate ? stallKindsLabel(duplicate.kinds) : "같은"} 제보가 있어요. 이 노점인가요?</p>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <button onClick={() => onOpenExisting(duplicateId)} className="rounded-lg bg-brand py-2 text-sm font-bold text-brand-ink">
               맞아요, 확인하러 가기
@@ -359,7 +370,7 @@ export function ReportStall({
       {error && <p className="text-sm text-danger">{error}</p>}
       <button
         onClick={() => void submit()}
-        disabled={!kind || !spot || saving}
+        disabled={!kinds.length || !spot || saving}
         className="w-full rounded-2xl bg-brand py-3.5 text-lg font-black text-brand-ink disabled:opacity-40"
       >
         {saving ? "올리는 중…" : "제보하기"}
