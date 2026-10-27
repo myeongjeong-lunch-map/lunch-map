@@ -116,6 +116,14 @@ body {
 .lm-marker.selected .emoji {
   background: #fff;
 }
+/* 가 볼 곳: 아직 아무도 안 가 본 가게는 점선 테두리 */
+.lm-marker.to-try:not(.selected) {
+  border: 1.5px dashed var(--muted);
+  color: var(--muted);
+}
+.lm-marker.to-try:not(.selected)::after {
+  border-top-color: var(--muted);
+}
 /* 캠퍼스 마커는 테마와 반대 색으로 눈에 띄게 */
 .lm-marker.campus {
   background: var(--foreground);
