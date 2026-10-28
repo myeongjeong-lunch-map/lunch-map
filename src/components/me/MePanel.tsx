@@ -85,7 +85,12 @@ export function MePanel({ account, onLogout, onNickname, places, myFavorites, my
               지금 이 브라우저에 남긴 평가·키워드·즐겨찾기·팀은 계정으로 옮겨요. 로그인하지 않아도 모든 기능을 쓸 수 있어요.
             </p>
             <GoogleLoginButton href={loginUrl()} />
-            <p className="mt-2 text-[11px] text-muted">계정을 구분하는 ID만 저장하고, 이메일·이름·사진은 화면에 쓰지 않아요.</p>
+            <p className="mt-2 text-[11px] text-muted">
+              계정을 구분하는 ID만 저장하고, 이메일·이름·사진은 화면에 쓰지 않아요.{" "}
+              <a href="/privacy" className="underline">
+                개인정보처리방침
+              </a>
+            </p>
           </>
         )}
       </section>
