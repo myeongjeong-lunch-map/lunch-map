@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, loginUrl, type Account } from "@/lib/api";
+import { GoogleLoginButton } from "@/components/me/GoogleLoginButton";
 import { KEYWORD_LABEL, timeAgo, type KeywordKey, type MyVote, type Place, type Tip } from "@/lib/domain";
 import { CategoryDot, Walking } from "@/components/place/PlaceList";
 
@@ -69,17 +70,21 @@ export function MePanel({ account, onLogout, onNickname, places, myFavorites, my
         ) : account ? (
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-bold">구글 계정으로 로그인했어요</p>
-            <button onClick={() => void logout()} disabled={leaving} className="shrink-0 text-xs font-bold text-muted hover:text-foreground disabled:opacity-40">
+            <button
+              onClick={() => void logout()}
+              disabled={leaving}
+              className="shrink-0 text-xs font-bold text-muted hover:text-foreground disabled:opacity-40"
+            >
               로그아웃
             </button>
           </div>
         ) : (
           <>
             <p className="text-sm font-bold">로그인하면 다른 기기에서도 내 기록이 이어져요</p>
-            <p className="mt-1 text-xs text-muted">지금 이 브라우저에 남긴 평가·키워드·즐겨찾기·팀은 계정으로 옮겨요. 로그인하지 않아도 모든 기능을 쓸 수 있어요.</p>
-            <a href={loginUrl()} className="mt-3 block rounded-xl bg-foreground py-3 text-center text-sm font-black text-background">
-              G 구글로 로그인
-            </a>
+            <p className="mt-1 text-xs text-muted">
+              지금 이 브라우저에 남긴 평가·키워드·즐겨찾기·팀은 계정으로 옮겨요. 로그인하지 않아도 모든 기능을 쓸 수 있어요.
+            </p>
+            <GoogleLoginButton href={loginUrl()} />
             <p className="mt-2 text-[11px] text-muted">계정을 구분하는 ID만 저장하고, 이메일·이름·사진은 화면에 쓰지 않아요.</p>
           </>
         )}
@@ -146,7 +151,19 @@ export function MePanel({ account, onLogout, onNickname, places, myFavorites, my
   );
 }
 
-function Section({ title, empty, places, onSelect, note }: { title: string; empty: string; places: Place[]; onSelect: (id: string) => void; note?: (p: Place) => string }) {
+function Section({
+  title,
+  empty,
+  places,
+  onSelect,
+  note,
+}: {
+  title: string;
+  empty: string;
+  places: Place[];
+  onSelect: (id: string) => void;
+  note?: (p: Place) => string;
+}) {
   return (
     <section className="mt-6">
       <h3 className="pb-1.5 text-sm font-black">
