@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 // 개인정보처리방침. 구글 로그인 앱 게시에 필요한 공개 페이지다 (docs/adr/0008).
 // 실제로 저장하는 것과 어긋나지 않게, 저장하는 칸이 바뀌면 이 페이지도 같이 고친다.
 const UPDATED = "2026년 10월 28일";
-const CONTACT = "https://github.com/myeongjeong-lunch-map/lunch-map/issues";
+const CONTACT_EMAIL = "myeongjeongLunchMap@gmail.com";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -100,10 +100,10 @@ export default function PrivacyPage() {
         <Section title="6. 문의">
           <p>
             개인정보 관련 문의나 삭제 요청은{" "}
-            <a href={CONTACT} className="font-bold text-brand underline" target="_blank" rel="noreferrer">
-              GitHub 이슈
+            <a href={`mailto:${CONTACT_EMAIL}`} className="font-bold text-brand underline">
+              {CONTACT_EMAIL}
             </a>
-            로 남겨 주세요.
+            로 메일을 보내 주세요.
           </p>
           <p>이 방침이 바뀌면 이 페이지의 시행일을 고치고 내용을 갱신합니다.</p>
         </Section>
