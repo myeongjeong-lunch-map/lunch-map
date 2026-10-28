@@ -209,6 +209,34 @@ Vercel Hobby 플랜은 프로젝트 주인이 아닌 사람의 커밋을 Git 연
 - `supabase-dev`는 개발 DB 프로젝트가 있는 Supabase 조직의 멤버여야 보인다.
 - `vercel`은 Vercel 프로젝트에 접근 권한이 있는 계정이어야 배포 정보가 보인다 (Hobby 플랜은 팀원을 초대할 수 없어 지금은 프로젝트 주인만).
 
+## Claude Code 클라우드에서 작업하기 (claude.ai/code)
+
+내 컴퓨터를 켜 두지 않아도 [claude.ai/code](https://claude.ai/code)나 모바일 앱에서 이 저장소로 작업을 맡길 수 있다. 저장소에는 이미 준비가 되어 있고, 사람마다 **클라우드 환경을 한 번** 만들면 된다.
+
+**저장소에 들어 있는 것**
+- [.claude/settings.json](.claude/settings.json)의 SessionStart 훅이 [scripts/cloud-setup.sh](scripts/cloud-setup.sh)를 부른다. 클라우드 세션(`CLAUDE_CODE_REMOTE=true`)에서만 `npm ci`를 하고, `package-lock.json`이 그대로면 건너뛴다. 로컬에서는 아무것도 하지 않는다.
+- `CLAUDE.md`, `AGENTS.md`, `.mcp.json`, 저장소 안의 `.claude/` 설정은 클라우드에서도 그대로 읽힌다. 내 컴퓨터의 `~/.claude`(개인 스킬·플러그인·메모리)는 따라가지 않는다.
+
+**클라우드 환경 만들기** (claude.ai/code → 환경 선택 → 새 환경)
+1. **이름**: `명정 점심 지도`
+2. **환경 변수**: `.env.dev.shared`의 **개발용 값**을 그대로 붙여 넣는다 (`.env` 형식). 운영 키(`.env.prod.shared`, `.env.local`)는 넣지 않는다. 클라우드 세션은 개발 DB만 만진다.
+3. **네트워크**: **Custom**을 고르고 "기본 허용 목록도 포함"을 켠 뒤 아래를 더한다. 기본 목록(Trusted)에는 npm·GitHub는 있지만 Supabase·네이버·TMAP은 없다.
+   ```
+   *.supabase.co
+   *.apigw.ntruss.com
+   apis.openapi.sk.com
+   map.naver.com
+   m.place.naver.com
+   oapi.map.naver.com
+   ```
+4. **설정 스크립트**: 비워 둔다 (의존성은 위 훅이 설치한다).
+
+**클라우드에서 다를 점**
+- GitHub는 프록시를 거쳐 GraphQL이 막혀 `gh pr` · `gh issue`가 403이다. PR은 세션 화면의 **Create PR** 버튼으로 만들고, 이슈·담당자 지정은 `gh api`(REST)로 한다. 예: `gh api repos/myeongjeong-lunch-map/lunch-map/issues -f title=... -f body=... -f "assignees[]=bbangHo"`
+- 기여 흐름(이슈 → `dev`에서 브랜치 → `dev`로 PR)은 로컬과 같다. `dev`·`master`에 직접 push하지 않는다.
+- 개발 서버 화면은 클라우드에서 볼 수 없다. 화면 확인이 필요한 PR은 dev 배포나 로컬에서 확인하고, PR 테스트 칸에 "확인 못 함"으로 남긴다.
+- 운영 DB 마이그레이션은 클라우드에서 하지 않는다 (지금처럼 사람이 SQL Editor에서).
+
 ## 버전
 
 [SemVer](https://semver.org/lang/ko/) `v주.부.수`를 쓴다. **운영 반영(`dev` → `master` 머지) 한 번이 버전 하나**다.
