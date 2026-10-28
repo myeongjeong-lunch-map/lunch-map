@@ -8,17 +8,23 @@ import { resolveNaverPlaceId } from "@/lib/naverPlaceId";
 
 export async function GET(req: NextRequest) {
   try {
-    const voterId = readVoterId(req);
+    const voterId = await readVoterId(req);
     const { places, myKeywords } = await readPlaceList(voterId);
 
     const myVotes: Record<string, MyVote> = {};
+    let myFavorites: string[] = [];
     if (voterId) {
-      const { data: votes, error } = await db().from("votes").select("place_id, value").eq("voter_id", voterId);
-      if (error) throw error;
-      for (const v of votes ?? []) myVotes[v.place_id] = v.value as MyVote;
+      const [votes, favorites] = await Promise.all([
+        db().from("votes").select("place_id, value").eq("voter_id", voterId),
+        db().from("favorites").select("place_id").eq("owner_id", voterId).order("created_at", { ascending: false }),
+      ]);
+      if (votes.error) throw votes.error;
+      if (favorites.error) throw favorites.error;
+      for (const v of votes.data ?? []) myVotes[v.place_id] = v.value as MyVote;
+      myFavorites = (favorites.data ?? []).map((f) => f.place_id);
     }
-    const res = NextResponse.json({ places, myVotes, myKeywords });
-    ensureVoterId(req, res);
+    const res = NextResponse.json({ places, myVotes, myKeywords, myFavorites });
+    await ensureVoterId(req, res);
     return res;
   } catch (e) {
     return errorResponse(e);
@@ -72,12 +78,12 @@ export async function POST(req: NextRequest) {
       throw error;
     }
     const res = NextResponse.json({ id: place.id }, { status: 201 });
+    const voterId = await ensureVoterId(req, res);
     if (tipBody) {
-      const { error: tErr } = await db().from("tips").insert({ place_id: place.id, body: tipBody, nickname });
+      const { error: tErr } = await db().from("tips").insert({ place_id: place.id, body: tipBody, nickname, author_id: voterId });
       if (tErr) throw tErr;
     }
     if (keywords.length) {
-      const voterId = ensureVoterId(req, res);
       const { error: kErr } = await db()
         .from("place_keywords")
         .insert(keywords.map((keyword) => ({ place_id: place.id, voter_id: voterId, keyword })));

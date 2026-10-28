@@ -45,6 +45,9 @@ type Props = {
   /** 추첨통이 열려 있는 내 팀들. 비어 있으면 추첨통에 넣기 버튼을 숨긴다. */
   drawTeams: TeamSummary[];
   onAddToBox: (teamId: string) => Promise<void>;
+  /** ⭐ 즐겨찾기에 담았는지 */
+  favorite: boolean;
+  onFavorite: () => void;
   /** 🎲 후보로 담았는지 */
   dicePicked: boolean;
   onDicePick: () => void;
@@ -69,6 +72,8 @@ export function PlaceDetail({
   onOpenTab,
   drawTeams,
   onAddToBox,
+  favorite,
+  onFavorite,
   dicePicked,
   onDicePick,
   halloween = false,
@@ -159,9 +164,19 @@ export function PlaceDetail({
         <CategoryDot category={place.category} /> {place.category}
         {place.naver_category ? ` · ${place.naver_category.split(">").pop()}` : ""} · {place.to_try ? "👀 가 볼 곳" : `#${rank}위`}
       </p>
-      <h2 className="mt-1 text-2xl font-black leading-tight">
-        {CATEGORY_EMOJI[place.category]} {place.name}
-      </h2>
+      <div className="mt-1 flex items-start gap-2">
+        <h2 className="min-w-0 flex-1 text-2xl font-black leading-tight">
+          {CATEGORY_EMOJI[place.category]} {place.name}
+        </h2>
+        <button
+          onClick={onFavorite}
+          aria-pressed={favorite}
+          aria-label={favorite ? "즐겨찾기에서 빼기" : "즐겨찾기에 담기"}
+          className={`shrink-0 rounded-full px-2 text-2xl leading-tight ${favorite ? "text-gold" : "text-muted hover:text-foreground"}`}
+        >
+          {favorite ? "★" : "☆"}
+        </button>
+      </div>
       <p className="mt-1 text-sm text-muted">
         <Walking place={place} />
         {place.walking_meters != null && ` · ${place.walking_meters.toLocaleString()}m`}

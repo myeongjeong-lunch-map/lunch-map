@@ -5,7 +5,7 @@
 
 **https://myeongjeong-lunch-map.vercel.app**
 
-로그인 없이 링크만 있으면 누구나 보고, 가게와 꿀팁을 더할 수 있다. 용어는 [GLOSSARY.md](GLOSSARY.md)를 따른다.
+로그인 없이 링크만 있으면 누구나 보고, 가게와 꿀팁을 더할 수 있다. 구글로 로그인하면 내 기록이 기기를 바꿔도 이어진다. 용어는 [GLOSSARY.md](GLOSSARY.md)를 따른다.
 
 ## 기능
 
@@ -55,6 +55,12 @@
 - 30m 안에 같은 종류의 제보가 있으면 새로 올리기 전에 그 노점인지 묻는다 ([ADR 0007](docs/adr/0007-street-sightings-without-stall-registry.md))
 - 지도에는 어느 탭에서든 노점 핀(스티커 아이콘 말풍선)이 보이고, 패널의 **지금 길거리 n곳**에서 목록을 본다
 
+### 👤 나 (로그인과 개인화)
+- 위쪽 👤 버튼: **구글로 로그인**·로그아웃, 계정 닉네임, ⭐ 즐겨찾기, 내 기록(내 평가·내 키워드·내 꿀팁)
+- 가게 카드 이름 옆 ☆를 누르면 **즐겨찾기**에 담긴다. 나에게만 보인다
+- 로그인하지 않아도 모두 쓸 수 있고 이 브라우저에 남는다. 로그인하면 이 브라우저의 평가·키워드·즐겨찾기·팀원 기록을 계정으로 옮기고, 다른 기기에서도 이어진다. 계정 닉네임은 꿀팁·팀 닉네임 칸에 미리 채워진다
+- 계정을 구분하는 ID와 직접 정한 닉네임만 저장하고, 이메일·이름·사진은 쓰지 않는다 ([ADR 0008](docs/adr/0008-google-login-with-supabase-auth.md))
+
 ### 관리자 (`/admin`)
 - `ADMIN_SECRET`으로 로그인해 가게 이름·카테고리·네이버 링크를 고치거나 가게·꿀팁을 지운다
 
@@ -80,8 +86,10 @@ src/
   app/
     page.tsx                 지도 화면 (LunchMap)
     admin/                   관리자 화면 (ADMIN_SECRET 로그인)
+    auth/                    구글 로그인 login·callback(기록 옮기기)·logout
     api/
-      places/                가게 목록·추가, [id]/tips·vote·keywords
+      places/                가게 목록·추가, [id]/tips·vote·keywords·favorite
+      me/                    내 계정(로그인 여부·닉네임), me/tips(내 꿀팁)
       teams/                 팀 목록·만들기, [id]/members·box(추첨통)·box/entries·box/draw(다시 뽑기 포함)·box/decide
       tips/                  꿀팁 피드
       search/, reverse/      네이버 장소 검색, 좌표 → 주소
@@ -91,10 +99,10 @@ src/
       street/                길거리 제보: 목록·제보, [id]/check(노점 확인), [id](고정 노점으로)
       mcp/                   MCP 서버 (읽기 전용 도구 7개)
       admin/                 관리자 수정·삭제
-  components/                LunchMap(전체 틀) + map/ place/ draw/ walk/ admin/ ui/ (기능별 폴더)
+  components/                LunchMap(전체 틀) + map/ place/ draw/ walk/ street/ me/ admin/ ui/ (기능별 폴더)
   lib/
     domain.ts                용어·타입·키워드 목록·랭킹 계산
-    server/                  Supabase, 네이버, TMAP, 쓰기 방어(허니팟·속도 제한), 쿠키
+    server/                  Supabase, 네이버, TMAP, 쓰기 방어(허니팟·속도 제한), 쿠키·로그인 세션
 supabase/migrations/         DB 스키마 (순서대로 적용)
 scripts/                     노션 데이터 옮기기, 플레이스 ID 채우기, Vercel 환경 변수 올리기
 claude-mod/lunch-today/      Claude Code "오늘 점심" 패널 mod (.claude-plugin/marketplace.json이 설치 목록)
@@ -103,7 +111,7 @@ claude-mod/lunch-today/      Claude Code "오늘 점심" 패널 mod (.claude-plu
 - **스택**: Next.js 16 (App Router) · Tailwind CSS 4 · Supabase(Postgres, 서울) · Vercel(서울 `icn1`)
 - **외부 API**: 네이버 지도(Maps), NAVER API HUB 지역 검색, SK TMAP 보행자 경로
 - 모든 DB 접근은 서버(API 라우트)에서 Supabase secret 키로만 한다. 테이블은 RLS로 직접 접근이 막혀 있다.
-- 로그인이 없으므로 평가·키워드는 브라우저 쿠키(`lm_voter`) 하나를 한 사람으로 본다.
+- 평가·키워드·즐겨찾기·팀원은 "나" ID 하나로 구분한다. 구글로 로그인했으면 계정 ID, 아니면 브라우저 쿠키(`lm_voter`)다. 로그인하면 그 브라우저의 기록을 계정으로 옮긴다 ([ADR 0008](docs/adr/0008-google-login-with-supabase-auth.md)).
 
 ## 로컬에서 실행
 
@@ -119,6 +127,16 @@ npm run dev                  # http://localhost:3000
    운영 DB를 그대로 쓰니 시험 데이터는 꼭 지운다.
 2. **내 키로 따로 쓰기** — `.env.example`의 주석대로 각 서비스에서 무료로 발급받고, 새 Supabase 프로젝트에 `supabase/migrations/`를 순서대로 실행한다.
    네이버 지도 허용 URL에 `http://localhost:3000`을 넣어야 지도가 뜬다.
+
+### 로그인 설정
+
+구글 로그인은 Supabase Auth를 쓴다. 새 환경 변수는 없고, Supabase 프로젝트마다(개발·운영 각각) 대시보드에서 한 번 설정한다.
+
+1. Google Cloud 콘솔 → API 및 서비스 → 사용자 인증 정보 → **OAuth 클라이언트 ID**(웹 애플리케이션)를 만든다. 승인된 리디렉션 URI는 `https://<프로젝트 ref>.supabase.co/auth/v1/callback`. OAuth 동의 화면의 범위는 기본(이메일·프로필·openid)만 둔다.
+2. Supabase → Authentication → Sign In / Providers → **Google**을 켜고 1번의 클라이언트 ID·시크릿을 넣는다.
+3. Supabase → Authentication → URL Configuration → **Redirect URLs**에 `http://localhost:3000/auth/callback`, dev 배포 주소와 운영 주소의 `/auth/callback`을 넣는다.
+
+설정하지 않으면 로그인 버튼만 실패하고(👤 화면에 "로그인하지 못했어요"), 나머지 기능은 그대로 동작한다.
 
 ## Claude에 점심 지도 연결하기 (MCP)
 

@@ -9,7 +9,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/teams/[id]/
     const { id } = await ctx.params;
     const { limit } = (await req.json()) as { limit?: unknown };
     if (!isDrawLimit(limit)) throw new HttpError(400, "넣을 수 있는 횟수는 1~3번이에요.");
-    await openBox(id, readVoterId(req), limit);
+    await openBox(id, await readVoterId(req), limit);
     return Response.json({ ok: true });
   } catch (e) {
     return errorResponse(e);
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/teams/[id]/
 export async function DELETE(req: NextRequest, ctx: RouteContext<"/api/teams/[id]/box">) {
   try {
     const { id } = await ctx.params;
-    await cancelBox(id, readVoterId(req));
+    await cancelBox(id, await readVoterId(req));
     return Response.json({ ok: true });
   } catch (e) {
     return errorResponse(e);

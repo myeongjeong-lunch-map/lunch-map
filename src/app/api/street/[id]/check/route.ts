@@ -14,7 +14,7 @@ export async function PUT(req: NextRequest, ctx: RouteContext<"/api/street/[id]/
     if (!stall || stall.removed_at) throw new HttpError(404, "노점을 찾을 수 없어요.");
     if (value !== null && !isCheckFor(stall.fixed, value)) throw new HttpError(400, "잘못된 확인이에요.");
     const res = NextResponse.json({ ok: true });
-    const voterId = ensureVoterId(req, res);
+    const voterId = await ensureVoterId(req, res);
     const now = new Date().toISOString();
     if (value === null) {
       const { error } = await db().from("stall_checks").delete().eq("stall_id", id).eq("voter_id", voterId);

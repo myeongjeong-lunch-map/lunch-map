@@ -6,7 +6,7 @@ import { teamDetail } from "@/lib/server/teamViews";
 export async function GET(req: NextRequest, ctx: RouteContext<"/api/teams/[id]">) {
   try {
     const { id } = await ctx.params;
-    return Response.json({ team: await teamDetail(id, readVoterId(req)) });
+    return Response.json({ team: await teamDetail(id, await readVoterId(req)) });
   } catch (e) {
     return errorResponse(e);
   }

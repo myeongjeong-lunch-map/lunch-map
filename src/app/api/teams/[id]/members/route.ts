@@ -13,7 +13,7 @@ export async function PUT(req: NextRequest, ctx: RouteContext<"/api/teams/[id]/m
     if (!nickname) throw new HttpError(400, "닉네임을 적어 주세요.");
     await getTeam(id);
     const res = NextResponse.json({ ok: true });
-    const me = ensureVoterId(req, res);
+    const me = await ensureVoterId(req, res);
     const { error } = await db().from("team_members").upsert({ team_id: id, member_id: me, nickname }, { onConflict: "team_id,member_id" });
     if (error) throw error;
     return res;
@@ -26,7 +26,7 @@ export async function PUT(req: NextRequest, ctx: RouteContext<"/api/teams/[id]/m
 export async function DELETE(req: NextRequest, ctx: RouteContext<"/api/teams/[id]/members">) {
   try {
     const { id } = await ctx.params;
-    await leaveTeam(id, readVoterId(req));
+    await leaveTeam(id, await readVoterId(req));
     return Response.json({ ok: true });
   } catch (e) {
     return errorResponse(e);
