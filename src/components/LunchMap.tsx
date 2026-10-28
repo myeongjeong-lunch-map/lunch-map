@@ -290,14 +290,14 @@ export function LunchMap() {
           </div>
         )}
         <div className="flex items-center justify-between gap-2">
-          <button onClick={() => setMode({ kind: "browse" })} className="text-left">
-            <p className="text-[11px] font-bold tracking-widest text-brand">{halloween ? "🎃 HAPPY HALLOWEEN" : "MYEONGJEONG LUNCH"}</p>
-            <h1 className="text-xl font-black">명정 점심 지도</h1>
+          <button onClick={() => setMode({ kind: "browse" })} className="min-w-0 text-left">
+            <p className="truncate text-[11px] font-bold tracking-widest text-brand">{halloween ? "🎃 HAPPY HALLOWEEN" : "MYEONGJEONG LUNCH"}</p>
+            <h1 className="whitespace-nowrap text-xl font-black">명정 점심 지도</h1>
           </button>
           <div className="flex shrink-0 items-center gap-1.5">
             {!editing && (
-              <button onClick={startAdd} className="rounded-full border border-line px-3 py-1.5 text-xs font-bold hover:bg-surface">
-                + 맛집 추가
+              <button onClick={startAdd} className="whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-xs font-bold hover:bg-surface">
+                {/* 좁은 휴대폰에서는 제목이 한 줄에 들어가도록 "+ 추가"로 줄인다 */}+ <span className="max-[400px]:hidden">맛집 </span>추가
               </button>
             )}
             <button
@@ -310,7 +310,7 @@ export function LunchMap() {
               className={
                 me.account
                   ? "grid h-7 w-7 place-items-center rounded-full bg-brand text-xs font-black text-brand-ink"
-                  : "rounded-full bg-foreground px-3 py-1.5 text-xs font-bold text-background hover:opacity-90"
+                  : "whitespace-nowrap rounded-full bg-foreground px-2.5 py-1.5 text-xs font-bold text-background hover:opacity-90"
               }
             >
               {/* 로그인 전에는 "로그인", 로그인하면 닉네임 첫 글자 프로필 (닉네임이 없으면 👤) */}
