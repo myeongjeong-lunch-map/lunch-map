@@ -47,6 +47,16 @@ export async function guardWrite(req: NextRequest, body: Record<string, unknown>
   await db().from("write_events").insert({ ip_hash: hash });
 }
 
+// 남용 방지 기록은 속도 제한(최근 10분)에만 쓰므로 30일이 지나면 지운다 (개인정보처리방침 「보관 기간과 삭제」)
+const WRITE_EVENT_RETENTION_DAYS = 30;
+
+export async function purgeWriteEvents(): Promise<{ deleted: number }> {
+  const before = new Date(Date.now() - WRITE_EVENT_RETENTION_DAYS * 24 * 60 * 60_000).toISOString();
+  const { count, error } = await db().from("write_events").delete({ count: "exact" }).lt("created_at", before);
+  if (error) throw error;
+  return { deleted: count ?? 0 };
+}
+
 // 로컬 개발(http://localhost)에서도 쿠키가 저장되도록 Secure는 배포 환경에서만 켠다
 const SECURE_COOKIE = process.env.NODE_ENV === "production";
 
