@@ -372,6 +372,22 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* 종류를 여러 개 고른 노점: 말풍선 왼쪽 위 귀퉁이에 나머지 수 */
+.lm-stall .more {
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #2b2118;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 15px;
+  text-align: center;
+}
 .lm-stall .age {
   font-size: 10px;
   font-weight: 600;

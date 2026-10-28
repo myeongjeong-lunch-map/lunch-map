@@ -577,3 +577,11 @@ export const STALL_KIND_LABEL = Object.fromEntries(STALL_KINDS.map((k) => [k.key
 export function isStallKind(v: unknown): v is StallKind {
   return STALL_KINDS.some((k) => k.key === v);
 }
+
+/** 노점 하나에 고를 수 있는 제보 종류 수. 처음 고른 것이 대표 종류다 */
+export const MAX_STALL_KINDS = 3;
+
+/** "군고구마 · 붕어빵" */
+export function stallKindsLabel(kinds: readonly StallKind[]): string {
+  return kinds.map((k) => STALL_KIND_LABEL[k]).join(" · ");
+}

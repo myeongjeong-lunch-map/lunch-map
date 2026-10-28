@@ -5,6 +5,7 @@ import {
   CATEGORIES,
   haversine,
   STALL_KIND_LABEL,
+  stallKindsLabel,
   STALL_KINDS,
   type StallKind,
   courseTime,
@@ -218,7 +219,7 @@ export function registerLunchTools(server: McpServer): void {
       annotations: { readOnlyHint: true },
     },
     async ({ kind }) => {
-      const list = (await readStreetStalls(null)).filter((s) => !kind || s.kind === kind);
+      const list = (await readStreetStalls(null)).filter((s) => !kind || s.kinds.includes(kind));
       if (!list.length) return text(kind ? `지금 보이는 ${STALL_KIND_LABEL[kind]} 노점이 없어요.` : "지금 보이는 길거리 노점이 없어요.");
       return text(
         `지금 길거리 ${list.length}곳:\n` +
@@ -232,7 +233,7 @@ export function registerLunchTools(server: McpServer): void {
                   : s.today === "closed"
                     ? "고정 · 오늘 닫음"
                     : `고정 · 마지막 확인 ${timeAgo(s.last_seen_at)}`;
-              return `- ${STALL_KIND_LABEL[s.kind]}${s.memo ? ` (${s.memo})` : ""} · ${state} · 캠퍼스에서 약 ${min}분 · https://map.naver.com/p/?c=${s.lng},${s.lat},18,0,0,0,dh`;
+              return `- ${stallKindsLabel(s.kinds)}${s.memo ? ` (${s.memo})` : ""} · ${state} · 캠퍼스에서 약 ${min}분 · https://map.naver.com/p/?c=${s.lng},${s.lat},18,0,0,0,dh`;
             })
             .join("\n"),
       );
