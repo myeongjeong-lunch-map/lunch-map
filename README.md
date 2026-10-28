@@ -134,7 +134,9 @@ npm run dev                  # http://localhost:3000
 
 1. Google Cloud 콘솔 → API 및 서비스 → 사용자 인증 정보 → **OAuth 클라이언트 ID**(웹 애플리케이션)를 만든다. 승인된 리디렉션 URI는 `https://<프로젝트 ref>.supabase.co/auth/v1/callback`. OAuth 동의 화면의 범위는 기본(이메일·프로필·openid)만 둔다.
 2. Supabase → Authentication → Sign In / Providers → **Google**을 켜고 1번의 클라이언트 ID·시크릿을 넣는다.
-3. Supabase → Authentication → URL Configuration → **Redirect URLs**에 `http://localhost:3000/auth/callback`, dev 배포 주소와 운영 주소의 `/auth/callback`을 넣는다.
+3. Supabase → Authentication → URL Configuration
+   - **Site URL**: 그 프로젝트의 배포 주소 (개발 DB는 dev 주소, 운영 DB는 운영 주소). 허용 목록에 맞지 않는 주소는 여기로 보내지므로 `localhost`로 두지 않는다.
+   - **Redirect URLs**: `http://localhost:3000/**`와 배포 주소 + `/**` (예: `https://myeongjeong-lunch-map-dev.vercel.app/**`). 로그인은 `/auth/callback?next=…`처럼 뒤에 값을 붙여 돌아오므로 `/auth/callback`만 넣으면 맞지 않는다.
 
 설정하지 않으면 로그인 버튼만 실패하고(👤 화면에 "로그인하지 못했어요"), 나머지 기능은 그대로 동작한다.
 

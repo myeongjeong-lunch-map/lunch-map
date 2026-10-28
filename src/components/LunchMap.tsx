@@ -305,11 +305,16 @@ export function LunchMap() {
                 setMode({ kind: "me" });
                 raiseSheet();
               }}
-              aria-label="나: 로그인·즐겨찾기·내 기록"
-              title="나: 로그인·즐겨찾기·내 기록"
-              className={`rounded-full border px-2.5 py-1.5 text-xs font-bold hover:bg-surface ${me.account ? "border-brand text-brand" : "border-line"}`}
+              aria-label={me.account ? "나: 즐겨찾기·내 기록" : "로그인"}
+              title={me.account ? "나: 즐겨찾기·내 기록" : "로그인"}
+              className={
+                me.account
+                  ? "grid h-7 w-7 place-items-center rounded-full bg-brand text-xs font-black text-brand-ink"
+                  : "rounded-full bg-foreground px-3 py-1.5 text-xs font-bold text-background hover:opacity-90"
+              }
             >
-              👤
+              {/* 로그인 전에는 "로그인", 로그인하면 닉네임 첫 글자 프로필 (닉네임이 없으면 👤) */}
+              {me.account ? me.account.nickname?.trim().charAt(0) || "👤" : "로그인"}
             </button>
             <ThemeToggle />
           </div>
@@ -446,7 +451,9 @@ export function LunchMap() {
           />
         ) : mode.kind === "me" ? (
           <>
-            {loginFailed && <p className="mx-5 mb-2 rounded-xl bg-danger/15 px-3 py-2.5 text-sm font-bold text-danger">로그인하지 못했어요. 다시 시도해 주세요.</p>}
+            {loginFailed && (
+              <p className="mx-5 mb-2 rounded-xl bg-danger/15 px-3 py-2.5 text-sm font-bold text-danger">로그인하지 못했어요. 다시 시도해 주세요.</p>
+            )}
             <MePanel
               key={me.account === undefined ? "loading" : "ready"}
               account={me.account}

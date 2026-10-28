@@ -14,6 +14,9 @@
   --surface: #f4f5f7;
   --surface-2: #ebedf0;
   --danger: #e5484d;
+  --google-bg: #ffffff;
+  --google-line: #747775;
+  --google-ink: #1f1f1f;
   color-scheme: light;
 }
 
@@ -27,6 +30,9 @@
     --surface: #1d1f26;
     --surface-2: #262832;
     --danger: #ff6b6b;
+    --google-bg: #131314;
+    --google-line: #8e918f;
+    --google-ink: #e3e3e3;
     color-scheme: dark;
   }
 }
@@ -40,7 +46,20 @@
   --surface: #1d1f26;
   --surface-2: #262832;
   --danger: #ff6b6b;
+  --google-bg: #131314;
+  --google-line: #8e918f;
+  --google-ink: #e3e3e3;
   color-scheme: dark;
+}
+
+/* 구글 로그인 버튼 (구글 브랜드 가이드의 Light/Dark 색) */
+.lm-google {
+  background: var(--google-bg);
+  border-color: var(--google-line);
+  color: var(--google-ink);
+}
+.lm-google:hover {
+  filter: brightness(0.97);
 }
 
 @theme inline {
