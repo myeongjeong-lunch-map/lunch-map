@@ -13,7 +13,7 @@ export async function PUT(req: NextRequest, ctx: RouteContext<"/api/places/[id]/
     if (unique.length > MAX_KEYWORDS_PER_PLACE) throw new HttpError(400, `키워드는 ${MAX_KEYWORDS_PER_PLACE}개까지 고를 수 있어요.`);
 
     const res = NextResponse.json({ ok: true });
-    const voterId = ensureVoterId(req, res);
+    const voterId = await ensureVoterId(req, res);
     const { error: delErr } = await db().from("place_keywords").delete().eq("place_id", id).eq("voter_id", voterId);
     if (delErr) throw delErr;
     if (unique.length) {

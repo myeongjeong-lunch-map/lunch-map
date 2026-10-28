@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "./supabase";
 import { HttpError } from "./guard";
 
-// 팀원은 평가와 같은 브라우저 쿠키(lm_voter)로 구분한다 (ADR 0003).
+// 팀원은 평가와 같은 "나" ID(로그인했으면 계정, 아니면 브라우저 쿠키 lm_voter)로 구분한다 (ADR 0003, 0008).
 
 export async function getTeam(teamId: string): Promise<{ id: string; name: string; leader_id: string }> {
   const { data, error } = await db().from("teams").select("id, name, leader_id").eq("id", teamId).maybeSingle();

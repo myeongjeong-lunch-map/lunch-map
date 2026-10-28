@@ -13,7 +13,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/teams/[id]/
   try {
     const { id } = await ctx.params;
     const placeId = await readPlaceId(req);
-    await putEntry(id, readVoterId(req), placeId);
+    await putEntry(id, await readVoterId(req), placeId);
     return Response.json({ ok: true });
   } catch (e) {
     return errorResponse(e);
@@ -25,7 +25,7 @@ export async function DELETE(req: NextRequest, ctx: RouteContext<"/api/teams/[id
   try {
     const { id } = await ctx.params;
     const placeId = await readPlaceId(req);
-    await takeEntry(id, readVoterId(req), placeId);
+    await takeEntry(id, await readVoterId(req), placeId);
     return Response.json({ ok: true });
   } catch (e) {
     return errorResponse(e);

@@ -2,6 +2,7 @@ import "server-only";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { unstable_rethrow } from "next/navigation";
 import type { NextRequest, NextResponse } from "next/server";
+import { currentUserId } from "./auth";
 import { db } from "./supabase";
 
 const WINDOW_MINUTES = 10;
@@ -49,16 +50,30 @@ export async function guardWrite(req: NextRequest, body: Record<string, unknown>
 // 로컬 개발(http://localhost)에서도 쿠키가 저장되도록 Secure는 배포 환경에서만 켠다
 const SECURE_COOKIE = process.env.NODE_ENV === "production";
 
-// 평가(Vote)는 웹 브라우저 하나를 한 명으로 본다. 브라우저 ID는 httpOnly 쿠키에 둔다.
-// 동시에 여러 요청이 ID를 새로 만들지 않도록 첫 목록 조회(GET /api/places) 때 미리 발급한다.
+// 나(평가·키워드·팀원·즐겨찾기의 주인) ID. 로그인했으면 계정 ID('u:' + auth.users id),
+// 아니면 웹 브라우저 하나를 한 명으로 보고 httpOnly 쿠키에 둔 브라우저 ID를 쓴다 (docs/adr/0008).
+// 동시에 여러 요청이 브라우저 ID를 새로 만들지 않도록 첫 목록 조회(GET /api/places) 때 미리 발급한다.
 const VOTER_COOKIE = "lm_voter";
+const ACCOUNT_PREFIX = "u:";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function readVoterId(req: NextRequest): string | null {
-  return req.cookies.get(VOTER_COOKIE)?.value ?? null;
+/** 쿠키의 브라우저 ID. 쿠키를 고쳐 계정 ID인 척하지 못하게 우리가 발급한 모양(UUID)만 받는다 */
+export function readBrowserId(req: NextRequest): string | null {
+  const v = req.cookies.get(VOTER_COOKIE)?.value;
+  return v && UUID_RE.test(v) ? v : null;
 }
 
-export function ensureVoterId(req: NextRequest, res: NextResponse): string {
-  const existing = readVoterId(req);
+export function accountKey(userId: string): string {
+  return ACCOUNT_PREFIX + userId;
+}
+
+export async function readVoterId(req: NextRequest): Promise<string | null> {
+  const userId = await currentUserId();
+  return userId ? accountKey(userId) : readBrowserId(req);
+}
+
+export async function ensureVoterId(req: NextRequest, res: NextResponse): Promise<string> {
+  const existing = await readVoterId(req);
   if (existing) return existing;
   const id = randomUUID();
   res.cookies.set(VOTER_COOKIE, id, { httpOnly: true, sameSite: "lax", secure: SECURE_COOKIE, path: "/", maxAge: 60 * 60 * 24 * 365 * 5 });

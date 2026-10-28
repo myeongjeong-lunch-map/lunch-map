@@ -9,7 +9,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/teams/[id]/
     const { id } = await ctx.params;
     const { animation } = (await req.json()) as { animation?: unknown };
     if (!isDrawAnimation(animation)) throw new HttpError(400, "연출을 골라 주세요.");
-    return Response.json({ result: await draw(id, readVoterId(req), animation) });
+    return Response.json({ result: await draw(id, await readVoterId(req), animation) });
   } catch (e) {
     return errorResponse(e);
   }

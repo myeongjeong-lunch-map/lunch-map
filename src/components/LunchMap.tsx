@@ -5,6 +5,7 @@ import { api, type SearchResult } from "@/lib/api";
 import { acceptsEntries } from "@/lib/drawBox";
 import { ranking, type LunchCourse, type RankingPeriod, type TeamSummary } from "@/lib/domain";
 import { usePlaceList } from "@/lib/usePlaceList";
+import { useAccount } from "@/lib/useAccount";
 import type { PlaceTab } from "@/lib/naverPlaceId";
 import { NaverMap } from "@/components/map/NaverMap";
 import { useLunchRouteLine, usePlaceRouteLine, useWalkRouteLine } from "@/components/map/routeLine";
@@ -23,6 +24,7 @@ import { BottomSheet, type SheetSnap } from "@/components/ui/BottomSheet";
 import { NaverPlacePanel } from "@/components/map/NaverPlacePanel";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { DrawTab } from "@/components/draw/DrawTab";
+import { MePanel } from "@/components/me/MePanel";
 import { useHalloween } from "@/components/ui/useHalloween";
 import { useStreetStalls } from "@/components/street/useStreetStalls";
 import { ReportStall, StallDetail, StreetBar, StreetList } from "@/components/street/StreetPanels";
@@ -60,11 +62,15 @@ type Mode =
   // 길거리 제보: 지금 길거리 목록, 노점 하나, 제보하기
   | { kind: "street" }
   | { kind: "stall"; id: string }
-  | { kind: "report" };
+  | { kind: "report" }
+  // 나: 로그인, 닉네임, 즐겨찾기, 내 기록
+  | { kind: "me" };
 
 export function LunchMap() {
   const isDesktop = useIsDesktop();
-  const { places, myVotes, myKeywords, recentTips, loadError, reload, vote, setKeywords, addTip } = usePlaceList();
+  const { places, myVotes, myKeywords, myFavorites, recentTips, loadError, reload, vote, setKeywords, toggleFavorite, addTip } = usePlaceList();
+  const me = useAccount();
+  const [loginFailed, setLoginFailed] = useState(false);
   const [tab, setTab] = useState<Tab>("rank");
   // 고르기 전에는 이벤트 기간이면 할로윈 순위, 아니면 이번 주
   const [pickedPeriod, setPeriod] = useState<RankingPeriod | null>(null);
@@ -127,6 +133,15 @@ export function LunchMap() {
       // 무시
     }
     setTeamIdState(invited ?? saved);
+    // 구글 로그인에 실패하면 /auth/callback이 ?login=failed 로 돌려보낸다
+    const params = new URLSearchParams(location.search);
+    if (params.get("login") === "failed") {
+      setLoginFailed(true);
+      setMode({ kind: "me" });
+      params.delete("login");
+      const rest = params.toString();
+      history.replaceState(null, "", location.pathname + (rest ? `?${rest}` : ""));
+    }
     if (invited) {
       setTab("draw");
       setSnap("full");
@@ -285,6 +300,17 @@ export function LunchMap() {
                 + 맛집 추가
               </button>
             )}
+            <button
+              onClick={() => {
+                setMode({ kind: "me" });
+                raiseSheet();
+              }}
+              aria-label="나: 로그인·즐겨찾기·내 기록"
+              title="나: 로그인·즐겨찾기·내 기록"
+              className={`rounded-full border px-2.5 py-1.5 text-xs font-bold hover:bg-surface ${me.account ? "border-brand text-brand" : "border-line"}`}
+            >
+              👤
+            </button>
             <ThemeToggle />
           </div>
         </div>
@@ -418,6 +444,22 @@ export function LunchMap() {
             onDone={(id) => endReport(id)}
             onOpenExisting={(id) => endReport(id)}
           />
+        ) : mode.kind === "me" ? (
+          <>
+            {loginFailed && <p className="mx-5 mb-2 rounded-xl bg-danger/15 px-3 py-2.5 text-sm font-bold text-danger">로그인하지 못했어요. 다시 시도해 주세요.</p>}
+            <MePanel
+              key={me.account === undefined ? "loading" : "ready"}
+              account={me.account}
+              onLogout={me.logout}
+              onNickname={me.setNickname}
+              places={all}
+              myFavorites={myFavorites}
+              myVotes={myVotes}
+              myKeywords={myKeywords}
+              onSelect={select}
+              onBack={() => setMode({ kind: "browse" })}
+            />
+          </>
         ) : mode.kind === "street" ? (
           <StreetList street={street} onBack={() => setMode({ kind: "browse" })} onOpen={openStall} onReport={startReport} />
         ) : mode.kind === "stall" ? (
@@ -453,6 +495,8 @@ export function LunchMap() {
               onOpenTab={(t) => setPlaceTab(t)}
               drawTeams={(teams ?? []).filter((t) => acceptsEntries(t.open_box))}
               onAddToBox={(id) => addToBox(id, selected.id)}
+              favorite={myFavorites.includes(selected.id)}
+              onFavorite={() => toggleFavorite(selected.id)}
               dicePicked={dice.has(selected.id)}
               onDicePick={() => dice.toggle(selected.id)}
               halloween={halloween}

@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { db } from "@/lib/server/supabase";
-import { cleanText, errorResponse, guardWrite, HttpError } from "@/lib/server/guard";
+import { db, TIP_COLUMNS } from "@/lib/server/supabase";
+import { cleanText, errorResponse, guardWrite, HttpError, readVoterId } from "@/lib/server/guard";
 
 export async function GET(_req: NextRequest, ctx: RouteContext<"/api/places/[id]/tips">) {
   try {
     const { id } = await ctx.params;
-    const { data, error } = await db().from("tips").select("*").eq("place_id", id).order("created_at", { ascending: false });
+    const { data, error } = await db().from("tips").select(TIP_COLUMNS).eq("place_id", id).order("created_at", { ascending: false });
     if (error) throw error;
     return NextResponse.json({ tips: data });
   } catch (e) {
@@ -24,8 +24,9 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/places/[id]
     await guardWrite(req, body);
     const { data, error } = await db()
       .from("tips")
-      .insert({ place_id: id, body: text, nickname: cleanText(body.nickname, 20) })
-      .select("*")
+      // 쓴 사람(author_id)은 내 기록에만 쓰고 응답에는 넣지 않는다
+      .insert({ place_id: id, body: text, nickname: cleanText(body.nickname, 20), author_id: await readVoterId(req) })
+      .select(TIP_COLUMNS)
       .single();
     if (error) throw error;
     return NextResponse.json({ tip: data }, { status: 201 });

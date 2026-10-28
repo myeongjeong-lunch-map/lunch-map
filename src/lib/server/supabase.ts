@@ -12,3 +12,6 @@ export function db(): SupabaseClient {
   client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   return client;
 }
+
+// 화면에 내보내는 꿀팁 칸. 쓴 사람(author_id)은 내 기록에만 쓰므로 빼고 고른다
+export const TIP_COLUMNS = "id, place_id, nickname, body, created_at";
