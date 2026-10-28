@@ -96,6 +96,7 @@ src/
       walk/                  산책 장소·코스·구간·가게 구간, path·lunch-path(구간별 보행 경로)
       cron/walking/          매일 도보 시간 재계산 (Vercel Cron)
       cron/walk-legs/        매일 산책 구간·가게 구간 재계산 (Vercel Cron)
+      cron/purge-write-events/ 매일 30일 지난 남용 방지 기록(IP 해시) 삭제 (Vercel Cron)
       street/                길거리 제보: 목록·제보, [id]/check(노점 확인), [id](고정 노점으로)
       mcp/                   MCP 서버 (읽기 전용 도구 7개)
       admin/                 관리자 수정·삭제
