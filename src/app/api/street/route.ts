@@ -10,8 +10,8 @@ import { findDuplicate, withinReportRadius } from "@/lib/street";
 export async function GET(req: NextRequest) {
   try {
     await connection();
-    const res = NextResponse.json({ stalls: await readStreetStalls(readVoterId(req)) });
-    ensureVoterId(req, res);
+    const res = NextResponse.json({ stalls: await readStreetStalls(await readVoterId(req)) });
+    await ensureVoterId(req, res);
     return res;
   } catch (e) {
     return errorResponse(e);
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     if (!withinReportRadius(lat, lng)) throw new HttpError(400, "캠퍼스에서 2km 안의 노점만 제보할 수 있어요.");
     const fixed = body.fixed === true;
     const res = NextResponse.json({ ok: true });
-    const voterId = ensureVoterId(req, res);
+    const voterId = await ensureVoterId(req, res);
 
     if (body.force !== true) {
       const dup = findDuplicate(await readStreetStalls(voterId), body.kind, lat, lng);
