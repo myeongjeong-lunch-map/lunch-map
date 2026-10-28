@@ -16,7 +16,7 @@ export const DAILY_RESET_HOUR = 5;
 export const REMOVE_VOTES = 2;
 /** 제보할 수 있는 거리 (캠퍼스에서) */
 export const REPORT_RADIUS_M = 2000;
-/** 이 안에 같은 종류의 노점이 있으면 새로 올리기 전에 그 노점인지 묻는다 */
+/** 이 안에 종류가 하나라도 겹치는 노점이 있으면 새로 올리기 전에 그 노점인지 묻는다 */
 export const DUPLICATE_RADIUS_M = 30;
 
 const HOUR = 3600_000;
@@ -39,7 +39,9 @@ export function withinReportRadius(lat: number, lng: number): boolean {
 
 export type StallRow = {
   id: string;
+  /** 대표 종류 (kinds[0]) */
   kind: StallKind;
+  kinds: StallKind[];
   memo: string | null;
   nickname: string | null;
   lat: number;
@@ -55,7 +57,10 @@ export type CheckRow = { stall_id: string; voter_id: string; value: StallCheckVa
 /** 화면으로 보내는 노점 하나. 제보한 브라우저 ID는 보내지 않는다 */
 export type StreetStall = {
   id: string;
+  /** 대표 종류: 처음 고른 것. 아이콘으로 쓴다 */
   kind: StallKind;
+  /** 고른 종류 모두 (대표 종류가 맨 앞, 최대 3개) */
+  kinds: StallKind[];
   memo: string | null;
   nickname: string | null;
   lat: number;
@@ -110,6 +115,7 @@ export function viewStall(row: StallRow, checks: CheckRow[], now: number, me: st
   return {
     id: row.id,
     kind: row.kind,
+    kinds: row.kinds,
     memo: row.memo,
     nickname: row.nickname,
     lat: row.lat,
@@ -125,7 +131,7 @@ export function viewStall(row: StallRow, checks: CheckRow[], now: number, me: st
   };
 }
 
-/** 같은 종류로 30m 안에 이미 보이는 노점 */
-export function findDuplicate(stalls: Pick<StreetStall, "id" | "kind" | "lat" | "lng">[], kind: StallKind, lat: number, lng: number) {
-  return stalls.find((s) => s.kind === kind && haversine(s.lat, s.lng, lat, lng) <= DUPLICATE_RADIUS_M) ?? null;
+/** 종류가 하나라도 겹치면서 30m 안에 이미 보이는 노점 */
+export function findDuplicate(stalls: Pick<StreetStall, "id" | "kinds" | "lat" | "lng">[], kinds: readonly StallKind[], lat: number, lng: number) {
+  return stalls.find((s) => s.kinds.some((k) => kinds.includes(k)) && haversine(s.lat, s.lng, lat, lng) <= DUPLICATE_RADIUS_M) ?? null;
 }

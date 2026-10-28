@@ -6,7 +6,7 @@ import { listTeams } from "@/lib/server/teamViews";
 // 팀 목록: 누구나 보고 골라서 들어올 수 있다
 export async function GET(req: NextRequest) {
   try {
-    return Response.json({ teams: await listTeams(readVoterId(req)) });
+    return Response.json({ teams: await listTeams(await readVoterId(req)) });
   } catch (e) {
     return errorResponse(e);
   }
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     await guardWrite(req, body);
 
     const res = NextResponse.json({ ok: true });
-    const me = ensureVoterId(req, res);
+    const me = await ensureVoterId(req, res);
     const { data, error } = await db().from("teams").insert({ name, leader_id: me }).select("id").single();
     if (error) throw error;
     const { error: memErr } = await db().from("team_members").insert({ team_id: data.id, member_id: me, nickname });

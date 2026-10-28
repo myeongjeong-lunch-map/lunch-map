@@ -14,6 +14,9 @@
   --surface: #f4f5f7;
   --surface-2: #ebedf0;
   --danger: #e5484d;
+  --google-bg: #ffffff;
+  --google-line: #747775;
+  --google-ink: #1f1f1f;
   color-scheme: light;
 }
 
@@ -27,6 +30,9 @@
     --surface: #1d1f26;
     --surface-2: #262832;
     --danger: #ff6b6b;
+    --google-bg: #131314;
+    --google-line: #8e918f;
+    --google-ink: #e3e3e3;
     color-scheme: dark;
   }
 }
@@ -40,7 +46,20 @@
   --surface: #1d1f26;
   --surface-2: #262832;
   --danger: #ff6b6b;
+  --google-bg: #131314;
+  --google-line: #8e918f;
+  --google-ink: #e3e3e3;
   color-scheme: dark;
+}
+
+/* 구글 로그인 버튼 (구글 브랜드 가이드의 Light/Dark 색) */
+.lm-google {
+  background: var(--google-bg);
+  border-color: var(--google-line);
+  color: var(--google-ink);
+}
+.lm-google:hover {
+  filter: brightness(0.97);
 }
 
 @theme inline {
@@ -115,6 +134,14 @@ body {
 }
 .lm-marker.selected .emoji {
   background: #fff;
+}
+/* 가 볼 곳: 아직 아무도 안 가 본 가게는 점선 테두리 */
+.lm-marker.to-try:not(.selected) {
+  border: 1.5px dashed var(--muted);
+  color: var(--muted);
+}
+.lm-marker.to-try:not(.selected)::after {
+  border-top-color: var(--muted);
 }
 /* 캠퍼스 마커는 테마와 반대 색으로 눈에 띄게 */
 .lm-marker.campus {
@@ -363,6 +390,22 @@ body {
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* 종류를 여러 개 고른 노점: 말풍선 왼쪽 위 귀퉁이에 나머지 수 */
+.lm-stall .more {
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #2b2118;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 15px;
+  text-align: center;
 }
 .lm-stall .age {
   font-size: 10px;

@@ -2,7 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, loadNickname, saveNickname } from "@/lib/api";
-import { KEYWORDS, MAX_KEYWORDS_PER_PLACE, naverMapUrl, timeAgo, type KeywordKey, type LunchCourse, type MyVote, type Place, type TeamSummary, type Tip } from "@/lib/domain";
+import {
+  KEYWORDS,
+  MAX_KEYWORDS_PER_PLACE,
+  naverMapUrl,
+  timeAgo,
+  type KeywordKey,
+  type LunchCourse,
+  type MyVote,
+  type Place,
+  type TeamSummary,
+  type Tip,
+} from "@/lib/domain";
 import { canPutIntoBox } from "@/lib/drawBox";
 import { isGhost } from "@/lib/halloween";
 import type { PlaceTab } from "@/lib/naverPlaceId";
@@ -34,6 +45,9 @@ type Props = {
   /** 추첨통이 열려 있는 내 팀들. 비어 있으면 추첨통에 넣기 버튼을 숨긴다. */
   drawTeams: TeamSummary[];
   onAddToBox: (teamId: string) => Promise<void>;
+  /** ⭐ 즐겨찾기에 담았는지 */
+  favorite: boolean;
+  onFavorite: () => void;
   /** 🎲 후보로 담았는지 */
   dicePicked: boolean;
   onDicePick: () => void;
@@ -44,7 +58,28 @@ type Props = {
   onOpenLunch: (course: LunchCourse) => void;
 };
 
-export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote, onKeywords, onBack, onTipAdded, openTab, onOpenTab, drawTeams, onAddToBox, dicePicked, onDicePick, halloween = false, walk, onOpenLunch }: Props) {
+export function PlaceDetail({
+  place,
+  rank,
+  backLabel,
+  myVote,
+  myKeywords,
+  onVote,
+  onKeywords,
+  onBack,
+  onTipAdded,
+  openTab,
+  onOpenTab,
+  drawTeams,
+  onAddToBox,
+  favorite,
+  onFavorite,
+  dicePicked,
+  onDicePick,
+  halloween = false,
+  walk,
+  onOpenLunch,
+}: Props) {
   const { courses: lunch } = useLunchCourses(walk, [place], "all");
   const [tips, setTips] = useState<Tip[] | null>(null);
   const [body, setBody] = useState("");
@@ -127,11 +162,21 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
       </button>
       <p className="mt-3 flex items-center gap-2 text-xs font-extrabold" style={{ color: CATEGORY_COLOR[place.category] }}>
         <CategoryDot category={place.category} /> {place.category}
-        {place.naver_category ? ` · ${place.naver_category.split(">").pop()}` : ""} · #{rank}위
+        {place.naver_category ? ` · ${place.naver_category.split(">").pop()}` : ""} · {place.to_try ? "👀 가 볼 곳" : `#${rank}위`}
       </p>
-      <h2 className="mt-1 text-2xl font-black leading-tight">
-        {CATEGORY_EMOJI[place.category]} {place.name}
-      </h2>
+      <div className="mt-1 flex items-start gap-2">
+        <h2 className="min-w-0 flex-1 text-2xl font-black leading-tight">
+          {CATEGORY_EMOJI[place.category]} {place.name}
+        </h2>
+        <button
+          onClick={onFavorite}
+          aria-pressed={favorite}
+          aria-label={favorite ? "즐겨찾기에서 빼기" : "즐겨찾기에 담기"}
+          className={`shrink-0 rounded-full px-2 text-2xl leading-tight ${favorite ? "text-gold" : "text-muted hover:text-foreground"}`}
+        >
+          {favorite ? "★" : "☆"}
+        </button>
+      </div>
       <p className="mt-1 text-sm text-muted">
         <Walking place={place} />
         {place.walking_meters != null && ` · ${place.walking_meters.toLocaleString()}m`}
@@ -142,6 +187,11 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
           <h3 className="pb-1.5 text-sm font-black">🍱 이 집에서 먹고 산책하려면</h3>
           <LunchCourseList courses={lunch} limit={3} compact onOpen={onOpenLunch} />
         </section>
+      )}
+      {place.to_try && !halloween && (
+        <p className="mt-3 rounded-xl border border-dashed border-line px-3 py-2.5 text-sm font-bold">
+          👀 아직 아무도 안 가 본 가 볼 곳이에요. 다녀와서 첫 꿀팁을 남기면 정식 맛집이 돼요!
+        </p>
       )}
       {halloween && (
         <p className={`mt-3 rounded-xl px-3 py-2.5 text-sm font-bold ${isGhost(place) ? "bg-surface-2" : "bg-brand/15 text-brand"}`}>
@@ -210,7 +260,12 @@ export function PlaceDetail({ place, rank, backLabel, myVote, myKeywords, onVote
         </div>
       ) : (
         // 네이버 플레이스와 아직 연결되지 않은 가게: 앱 안에 띄울 수 없어 새 창으로 연다
-        <a href={naverMapUrl(place)} target="_blank" rel="noreferrer" className="mt-2 block rounded-xl bg-surface-2 py-2.5 text-center text-sm font-bold hover:bg-line">
+        <a
+          href={naverMapUrl(place)}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 block rounded-xl bg-surface-2 py-2.5 text-center text-sm font-bold hover:bg-line"
+        >
           📋 네이버에서 메뉴·사진 보기 ↗
         </a>
       )}

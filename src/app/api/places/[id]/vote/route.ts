@@ -9,7 +9,7 @@ export async function PUT(req: NextRequest, ctx: RouteContext<"/api/places/[id]/
     const { value } = (await req.json()) as { value?: unknown };
     if (value !== 1 && value !== -1 && value !== 0) throw new HttpError(400, "잘못된 평가예요.");
     const res = NextResponse.json({ ok: true });
-    const voterId = ensureVoterId(req, res);
+    const voterId = await ensureVoterId(req, res);
     if (value === 0) {
       const { error } = await db().from("votes").delete().eq("place_id", id).eq("voter_id", voterId);
       if (error) throw error;

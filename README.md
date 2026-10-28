@@ -5,7 +5,7 @@
 
 **https://myeongjeong-lunch-map.vercel.app**
 
-로그인 없이 링크만 있으면 누구나 보고, 가게와 꿀팁을 더할 수 있다. 용어는 [GLOSSARY.md](GLOSSARY.md)를 따른다.
+로그인 없이 링크만 있으면 누구나 보고, 가게와 꿀팁을 더할 수 있다. 구글로 로그인하면 내 기록이 기기를 바꿔도 이어진다. 용어는 [GLOSSARY.md](GLOSSARY.md)를 따른다.
 
 ## 기능
 
@@ -31,6 +31,7 @@
 - **꿀팁**: 추천 메뉴·가격·가는 길·웨이팅을 닉네임(선택)과 함께 남긴다
 - **📋 메뉴판 · 📷 사진 · ⭐ 리뷰**: 네이버 플레이스 페이지를 앱 안에 띄운다 ([ADR 0002](docs/adr/0002-menu-photos-via-embedded-naver-place.md)). 네이버와 연결되지 않은 가게는 새 창으로 연다
 - **가게 추가** (누구나): 네이버 장소 검색 결과를 지도에 번호 핀 ①~⑤로 보여 주고 골라서 등록한다. 검색에 없으면 지도에 핀을 직접 꽂는다. 이름 + 도로명 주소가 같으면 이미 등록된 가게로 안내한다. 카테고리·키워드·첫 꿀팁·네이버 지도 링크를 함께 넣을 수 있다
+- **👀 가 볼 곳**: 가게를 추가할 때 "아직 안 가 봤어요"를 고르면 지나가다 본, 아직 아무도 안 가 본 가게로 등록된다 (키워드·첫 꿀팁 없이). 지도에서 점선 테두리 핀으로 보이고, 랭킹·🎲 오늘 뭐 먹지?·점심 코스 추천에서 빠진다(직접 후보로 담거나 추첨통에 넣는 건 된다). 누가 다녀와서 첫 꿀팁을 남기면 정식 가게가 된다
 
 ### 오늘 뭐 먹지
 - **🎲 오늘 뭐 먹지?**: 지금 목록 필터 안에서 한 곳을 무작위로 고른다
@@ -48,11 +49,17 @@
 - **점심 코스**: 가게 한 곳 + 산책 장소 한 곳. **먹고 걷기** / **포장해서 먹기**, 점심시간(12:50~14:00) 안에 돌아오는 것만, **복귀 시각**을 크게 보여 준다. 앱으로 **미리 주문**하는 가게는 기다리는 시간을 짧게 잡는다 ([ADR 0006](docs/adr/0006-place-legs-bounded-then-computed.md))
 
 ### 🐟 길거리 제보
-- 지나가다 본 **붕어빵·호떡·군고구마·군밤·어묵·떡볶이·푸드트럭** 노점을 📍 내 위치(또는 지도에서 골라)로 제보한다. 캠퍼스에서 2km 안, 한 줄 메모·닉네임(선택)
+- 지나가다 본 **붕어빵·호떡·군고구마·군밤·어묵·떡볶이·푸드트럭** 노점을 📍 내 위치(또는 지도에서 골라)로 제보한다. 같이 파는 종류는 최대 3개까지 고르고, 처음 고른 것이 지도 아이콘이 된다. 캠퍼스에서 2km 안, 한 줄 메모·닉네임(선택)
 - **일일 노점**(오늘 본 곳): 마지막 확인 뒤 6시간 보이고 매일 05:00에 정리. "아직 있어요"로 연장, "없어졌어요" 2번(제보한 사람은 1번)이면 내려간다
 - **고정 노점**(매일 나오는 곳): 사라지지 않고 "오늘 열었어요 / 오늘은 안 열었어요 / 이제 안 나와요"로 확인. 오늘 연 곳만 지도에 진하게. 14일 동안 확인이 없거나 "이제 안 나와요" 2번이면 내려간다. 일일 노점은 누구나 고정 노점으로 바꿀 수 있다
-- 30m 안에 같은 종류의 제보가 있으면 새로 올리기 전에 그 노점인지 묻는다 ([ADR 0007](docs/adr/0007-street-sightings-without-stall-registry.md))
+- 30m 안에 종류가 하나라도 겹치는 제보가 있으면 새로 올리기 전에 그 노점인지 묻는다 ([ADR 0007](docs/adr/0007-street-sightings-without-stall-registry.md))
 - 지도에는 어느 탭에서든 노점 핀(스티커 아이콘 말풍선)이 보이고, 패널의 **지금 길거리 n곳**에서 목록을 본다
+
+### 👤 나 (로그인과 개인화)
+- 위쪽 👤 버튼: **구글로 로그인**·로그아웃, 계정 닉네임, ⭐ 즐겨찾기, 내 기록(내 평가·내 키워드·내 꿀팁)
+- 가게 카드 이름 옆 ☆를 누르면 **즐겨찾기**에 담긴다. 나에게만 보인다
+- 로그인하지 않아도 모두 쓸 수 있고 이 브라우저에 남는다. 로그인하면 이 브라우저의 평가·키워드·즐겨찾기·팀원 기록을 계정으로 옮기고, 다른 기기에서도 이어진다. 계정 닉네임은 꿀팁·팀 닉네임 칸에 미리 채워진다
+- 계정을 구분하는 ID와 직접 정한 닉네임만 저장하고, 이메일·이름·사진은 쓰지 않는다 ([ADR 0008](docs/adr/0008-google-login-with-supabase-auth.md))
 
 ### 관리자 (`/admin`)
 - `ADMIN_SECRET`으로 로그인해 가게 이름·카테고리·네이버 링크를 고치거나 가게·꿀팁을 지운다
@@ -79,8 +86,10 @@ src/
   app/
     page.tsx                 지도 화면 (LunchMap)
     admin/                   관리자 화면 (ADMIN_SECRET 로그인)
+    auth/                    구글 로그인 login·callback(기록 옮기기)·logout
     api/
-      places/                가게 목록·추가, [id]/tips·vote·keywords
+      places/                가게 목록·추가, [id]/tips·vote·keywords·favorite
+      me/                    내 계정(로그인 여부·닉네임), me/tips(내 꿀팁)
       teams/                 팀 목록·만들기, [id]/members·box(추첨통)·box/entries·box/draw(다시 뽑기 포함)·box/decide
       tips/                  꿀팁 피드
       search/, reverse/      네이버 장소 검색, 좌표 → 주소
@@ -90,10 +99,10 @@ src/
       street/                길거리 제보: 목록·제보, [id]/check(노점 확인), [id](고정 노점으로)
       mcp/                   MCP 서버 (읽기 전용 도구 7개)
       admin/                 관리자 수정·삭제
-  components/                LunchMap(전체 틀) + map/ place/ draw/ walk/ admin/ ui/ (기능별 폴더)
+  components/                LunchMap(전체 틀) + map/ place/ draw/ walk/ street/ me/ admin/ ui/ (기능별 폴더)
   lib/
     domain.ts                용어·타입·키워드 목록·랭킹 계산
-    server/                  Supabase, 네이버, TMAP, 쓰기 방어(허니팟·속도 제한), 쿠키
+    server/                  Supabase, 네이버, TMAP, 쓰기 방어(허니팟·속도 제한), 쿠키·로그인 세션
 supabase/migrations/         DB 스키마 (순서대로 적용)
 scripts/                     노션 데이터 옮기기, 플레이스 ID 채우기, Vercel 환경 변수 올리기
 claude-mod/lunch-today/      Claude Code "오늘 점심" 패널 mod (.claude-plugin/marketplace.json이 설치 목록)
@@ -102,7 +111,7 @@ claude-mod/lunch-today/      Claude Code "오늘 점심" 패널 mod (.claude-plu
 - **스택**: Next.js 16 (App Router) · Tailwind CSS 4 · Supabase(Postgres, 서울) · Vercel(서울 `icn1`)
 - **외부 API**: 네이버 지도(Maps), NAVER API HUB 지역 검색, SK TMAP 보행자 경로
 - 모든 DB 접근은 서버(API 라우트)에서 Supabase secret 키로만 한다. 테이블은 RLS로 직접 접근이 막혀 있다.
-- 로그인이 없으므로 평가·키워드는 브라우저 쿠키(`lm_voter`) 하나를 한 사람으로 본다.
+- 평가·키워드·즐겨찾기·팀원은 "나" ID 하나로 구분한다. 구글로 로그인했으면 계정 ID, 아니면 브라우저 쿠키(`lm_voter`)다. 로그인하면 그 브라우저의 기록을 계정으로 옮긴다 ([ADR 0008](docs/adr/0008-google-login-with-supabase-auth.md)).
 
 ## 로컬에서 실행
 
@@ -118,6 +127,18 @@ npm run dev                  # http://localhost:3000
    운영 DB를 그대로 쓰니 시험 데이터는 꼭 지운다.
 2. **내 키로 따로 쓰기** — `.env.example`의 주석대로 각 서비스에서 무료로 발급받고, 새 Supabase 프로젝트에 `supabase/migrations/`를 순서대로 실행한다.
    네이버 지도 허용 URL에 `http://localhost:3000`을 넣어야 지도가 뜬다.
+
+### 로그인 설정
+
+구글 로그인은 Supabase Auth를 쓴다. 새 환경 변수는 없고, Supabase 프로젝트마다(개발·운영 각각) 대시보드에서 한 번 설정한다.
+
+1. Google Cloud 콘솔 → API 및 서비스 → 사용자 인증 정보 → **OAuth 클라이언트 ID**(웹 애플리케이션)를 만든다. 승인된 리디렉션 URI는 `https://<프로젝트 ref>.supabase.co/auth/v1/callback`. OAuth 동의 화면의 범위는 기본(이메일·프로필·openid)만 둔다.
+2. Supabase → Authentication → Sign In / Providers → **Google**을 켜고 1번의 클라이언트 ID·시크릿을 넣는다.
+3. Supabase → Authentication → URL Configuration
+   - **Site URL**: 그 프로젝트의 배포 주소 (개발 DB는 dev 주소, 운영 DB는 운영 주소). 허용 목록에 맞지 않는 주소는 여기로 보내지므로 `localhost`로 두지 않는다.
+   - **Redirect URLs**: `http://localhost:3000/**`와 배포 주소 + `/**` (예: `https://myeongjeong-lunch-map-dev.vercel.app/**`). 로그인은 `/auth/callback?next=…`처럼 뒤에 값을 붙여 돌아오므로 `/auth/callback`만 넣으면 맞지 않는다.
+
+설정하지 않으면 로그인 버튼만 실패하고(👤 화면에 "로그인하지 못했어요"), 나머지 기능은 그대로 동작한다.
 
 ## Claude에 점심 지도 연결하기 (MCP)
 
@@ -142,8 +163,8 @@ claude mcp add --scope user --transport http lunch-map https://myeongjeong-lunch
 |---|---|
 | `search_places` | 이름·카테고리·키워드·최대 도보 분으로 가게 찾기 |
 | `get_place` | 가게 하나의 주소·도보 시간·평가·키워드·최근 꿀팁·네이버 지도 링크 |
-| `get_ranking` | 랭킹 (이번 주 / 전체) |
-| `pick_lunch` | 오늘 뭐 먹지: 조건 안에서 무작위 한 곳 |
+| `get_ranking` | 랭킹 (이번 주 / 전체). 가 볼 곳은 빠진다 |
+| `pick_lunch` | 오늘 뭐 먹지: 조건 안에서 무작위 한 곳 (가 볼 곳은 빼고) |
 | `get_team_box` | 팀의 열린 추첨통: 가게·넣은 횟수·확률·넣은 사람 |
 | `list_walk_courses` | 추천 산책 코스와 코스 시간 |
 | `list_street_stalls` | 지금 보이는 길거리 노점 (종류로 거르기) |
@@ -207,6 +228,34 @@ Vercel Hobby 플랜은 프로젝트 주인이 아닌 사람의 커밋을 Git 연
 - 운영 DB는 MCP에 연결하지 않는다. 운영 DB 변경은 지금처럼 사람이 SQL Editor에서 확인하고 실행한다.
 - `supabase-dev`는 개발 DB 프로젝트가 있는 Supabase 조직의 멤버여야 보인다.
 - `vercel`은 Vercel 프로젝트에 접근 권한이 있는 계정이어야 배포 정보가 보인다 (Hobby 플랜은 팀원을 초대할 수 없어 지금은 프로젝트 주인만).
+
+## Claude Code 클라우드에서 작업하기 (claude.ai/code)
+
+내 컴퓨터를 켜 두지 않아도 [claude.ai/code](https://claude.ai/code)나 모바일 앱에서 이 저장소로 작업을 맡길 수 있다. 저장소에는 이미 준비가 되어 있고, 사람마다 **클라우드 환경을 한 번** 만들면 된다.
+
+**저장소에 들어 있는 것**
+- [.claude/settings.json](.claude/settings.json)의 SessionStart 훅이 [scripts/cloud-setup.sh](scripts/cloud-setup.sh)를 부른다. 클라우드 세션(`CLAUDE_CODE_REMOTE=true`)에서만 `npm ci`를 하고, `package-lock.json`이 그대로면 건너뛴다. 로컬에서는 아무것도 하지 않는다.
+- `CLAUDE.md`, `AGENTS.md`, `.mcp.json`, 저장소 안의 `.claude/` 설정은 클라우드에서도 그대로 읽힌다. 내 컴퓨터의 `~/.claude`(개인 스킬·플러그인·메모리)는 따라가지 않는다.
+
+**클라우드 환경 만들기** (claude.ai/code → 환경 선택 → 새 환경)
+1. **이름**: `명정 점심 지도`
+2. **환경 변수**: `.env.dev.shared`의 **개발용 값**을 그대로 붙여 넣는다 (`.env` 형식). 운영 키(`.env.prod.shared`, `.env.local`)는 넣지 않는다. 클라우드 세션은 개발 DB만 만진다.
+3. **네트워크**: **Custom**을 고르고 "기본 허용 목록도 포함"을 켠 뒤 아래를 더한다. 기본 목록(Trusted)에는 npm·GitHub는 있지만 Supabase·네이버·TMAP은 없다.
+   ```
+   *.supabase.co
+   *.apigw.ntruss.com
+   apis.openapi.sk.com
+   map.naver.com
+   m.place.naver.com
+   oapi.map.naver.com
+   ```
+4. **설정 스크립트**: 비워 둔다 (의존성은 위 훅이 설치한다).
+
+**클라우드에서 다를 점**
+- GitHub는 프록시를 거쳐 GraphQL이 막혀 `gh pr` · `gh issue`가 403이다. PR은 세션 화면의 **Create PR** 버튼으로 만들고, 이슈·담당자 지정은 `gh api`(REST)로 한다. 예: `gh api repos/myeongjeong-lunch-map/lunch-map/issues -f title=... -f body=... -f "assignees[]=bbangHo"`
+- 기여 흐름(이슈 → `dev`에서 브랜치 → `dev`로 PR)은 로컬과 같다. `dev`·`master`에 직접 push하지 않는다.
+- 개발 서버 화면은 클라우드에서 볼 수 없다. 화면 확인이 필요한 PR은 dev 배포나 로컬에서 확인하고, PR 테스트 칸에 "확인 못 함"으로 남긴다.
+- 운영 DB 마이그레이션은 클라우드에서 하지 않는다 (지금처럼 사람이 SQL Editor에서).
 
 ## 버전
 

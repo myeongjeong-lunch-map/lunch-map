@@ -5,6 +5,7 @@ import {
   CATEGORIES,
   haversine,
   STALL_KIND_LABEL,
+  stallKindsLabel,
   STALL_KINDS,
   type StallKind,
   courseTime,
@@ -65,7 +66,7 @@ function topKeywords(p: Place, n = 3): string {
 function line(p: Place): string {
   const min = walkingMinutes(p);
   const kw = topKeywords(p);
-  return `- ${p.name} (${p.category}) · 도보 ${min == null ? "?" : min}분 · 👍${p.likes} 👎${p.dislikes} · 꿀팁 ${p.tip_count}${kw ? ` · ${kw}` : ""} [id: ${p.id}]`;
+  return `- ${p.name} (${p.category})${p.to_try ? " · 👀 가 볼 곳(아직 아무도 안 가 봄)" : ""} · 도보 ${min == null ? "?" : min}분 · 👍${p.likes} 👎${p.dislikes} · 꿀팁 ${p.tip_count}${kw ? ` · ${kw}` : ""} [id: ${p.id}]`;
 }
 
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
@@ -119,6 +120,7 @@ export function registerLunchTools(server: McpServer): void {
       return text(
         [
           `${p.name} (${p.category}${p.naver_category ? ` · ${p.naver_category}` : ""})`,
+          ...(p.to_try ? ["👀 가 볼 곳: 아직 아무도 안 가 본 채로 등록됐어요. 첫 꿀팁이 달리면 정식 가게가 돼요."] : []),
           `주소: ${p.road_address}`,
           `도보: ${min == null ? "모름" : `${min}분`}${p.walking_meters != null ? ` · ${p.walking_meters}m` : ""} (캠퍼스 기준)`,
           `평가: 👍${p.likes} 👎${p.dislikes}`,
@@ -135,7 +137,7 @@ export function registerLunchTools(server: McpServer): void {
     "get_ranking",
     {
       title: "랭킹",
-      description: "가게 랭킹. week=이번 주(최근 7일 좋아요×2 + 꿀팁), all=전체(좋아요 − 싫어요). 이번 주 기록이 없으면 전체를 보여 준다.",
+      description: "가게 랭킹. week=이번 주(최근 7일 좋아요×2 + 꿀팁), all=전체(좋아요 − 싫어요). 이번 주 기록이 없으면 전체를 보여 준다. 가 볼 곳은 빠진다.",
       inputSchema: z.object({ period: z.enum(["week", "all"]).default("week"), limit: z.number().int().min(1).max(30).default(10) }),
       annotations: { readOnlyHint: true },
     },
@@ -155,12 +157,12 @@ export function registerLunchTools(server: McpServer): void {
     "pick_lunch",
     {
       title: "오늘 뭐 먹지",
-      description: "조건 안에서 가게 하나를 무작위로 골라 준다.",
+      description: "조건 안에서 가게 하나를 무작위로 골라 준다. 가 볼 곳(아직 아무도 안 가 본 가게)은 빼고 고른다.",
       inputSchema: z.object(filterShape),
       annotations: { readOnlyHint: true },
     },
     async (f) => {
-      const pool = (await places()).filter((p) => matches(p, f));
+      const pool = (await places()).filter((p) => !p.to_try && matches(p, f));
       if (!pool.length) return text("조건에 맞는 가게가 없어요.");
       const p = pool[Math.floor(Math.random() * pool.length)];
       return text(`🎲 ${pool.length}곳 중에서 골랐어요.\n${line(p).slice(2)}\n네이버 지도: ${naverMapUrl(p)}`);
@@ -217,7 +219,7 @@ export function registerLunchTools(server: McpServer): void {
       annotations: { readOnlyHint: true },
     },
     async ({ kind }) => {
-      const list = (await readStreetStalls(null)).filter((s) => !kind || s.kind === kind);
+      const list = (await readStreetStalls(null)).filter((s) => !kind || s.kinds.includes(kind));
       if (!list.length) return text(kind ? `지금 보이는 ${STALL_KIND_LABEL[kind]} 노점이 없어요.` : "지금 보이는 길거리 노점이 없어요.");
       return text(
         `지금 길거리 ${list.length}곳:\n` +
@@ -231,7 +233,7 @@ export function registerLunchTools(server: McpServer): void {
                   : s.today === "closed"
                     ? "고정 · 오늘 닫음"
                     : `고정 · 마지막 확인 ${timeAgo(s.last_seen_at)}`;
-              return `- ${STALL_KIND_LABEL[s.kind]}${s.memo ? ` (${s.memo})` : ""} · ${state} · 캠퍼스에서 약 ${min}분 · https://map.naver.com/p/?c=${s.lng},${s.lat},18,0,0,0,dh`;
+              return `- ${stallKindsLabel(s.kinds)}${s.memo ? ` (${s.memo})` : ""} · ${state} · 캠퍼스에서 약 ${min}분 · https://map.naver.com/p/?c=${s.lng},${s.lat},18,0,0,0,dh`;
             })
             .join("\n"),
       );

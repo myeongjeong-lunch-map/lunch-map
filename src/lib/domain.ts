@@ -35,6 +35,8 @@ export type Place = {
   walking_source: "tmap" | "estimate" | null;
   /** 앱으로 미리 주문해 두고 받기만 하는 가게 (관리자가 표시). 포장해서 먹기에서 기다리는 시간이 짧다 */
   preorder: boolean;
+  /** 가 볼 곳: 아직 안 가 본 채로 등록했고 꿀팁이 하나도 없다. 랭킹·추천에서 빠지고, 첫 꿀팁이 달리면 정식 가게가 된다 */
+  to_try: boolean;
   likes: number;
   dislikes: number;
   tip_count: number;
@@ -308,7 +310,8 @@ export function lunchCourses(
   const budget = LUNCH_END_MINUTES - start;
   const out: { seconds: number; course: LunchCourse }[] = [];
   for (const place of places) {
-    if (place.walking_seconds == null) continue;
+    // 가 볼 곳은 아직 검증되지 않아 추천하지 않는다
+    if (place.walking_seconds == null || place.to_try) continue;
     const cp = place.walking_seconds;
     for (const spot of spots) {
       const campusLeg = legs.get(legKey(null, spot.id));
@@ -395,7 +398,9 @@ export type Ranking = {
   ranked: Place[];
 };
 
-export function ranking(places: Place[], period: RankingPeriod): Ranking {
+/** 가 볼 곳은 줄 세우지 않는다 */
+export function ranking(all: Place[], period: RankingPeriod): Ranking {
+  const places = all.filter((p) => !p.to_try);
   const fellBack = period === "week" && places.every((p) => p.weekly_score === 0);
   const effective: RankingPeriod = fellBack ? "all" : period;
   const score =
@@ -427,7 +432,7 @@ export function applyKeywords(place: Place, prev: KeywordKey[], next: KeywordKey
 
 /** 꿀팁이 하나 달린 가게 */
 export function applyTip(place: Place): Place {
-  return { ...place, tip_count: place.tip_count + 1, weekly_score: place.weekly_score + weeklyScore(0, 1), event_tips: place.event_tips + 1 };
+  return { ...place, to_try: false, tip_count: place.tip_count + 1, weekly_score: place.weekly_score + weeklyScore(0, 1), event_tips: place.event_tips + 1 };
 }
 
 export function topKeyword(place: Place): { key: KeywordKey; count: number } | null {
@@ -571,4 +576,12 @@ export const STALL_KIND_LABEL = Object.fromEntries(STALL_KINDS.map((k) => [k.key
 
 export function isStallKind(v: unknown): v is StallKind {
   return STALL_KINDS.some((k) => k.key === v);
+}
+
+/** 노점 하나에 고를 수 있는 제보 종류 수. 처음 고른 것이 대표 종류다 */
+export const MAX_STALL_KINDS = 3;
+
+/** "군고구마 · 붕어빵" */
+export function stallKindsLabel(kinds: readonly StallKind[]): string {
+  return kinds.map((k) => STALL_KIND_LABEL[k]).join(" · ");
 }
