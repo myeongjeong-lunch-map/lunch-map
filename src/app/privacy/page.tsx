@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 // 개인정보처리방침. 구글 로그인 앱 게시에 필요한 공개 페이지다 (docs/adr/0008).
 // 실제로 저장하는 것과 어긋나지 않게, 저장하는 칸이 바뀌면 이 페이지도 같이 고친다.
-const UPDATED = "2026년 10월 28일";
+const UPDATED = "2026년 10월 29일";
 const CONTACT_EMAIL = "myeongjeongLunchMap@gmail.com";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -53,6 +53,10 @@ export default function PrivacyPage() {
               원문은 저장하지 않으며, 이 기록은 30일 뒤 자동으로 지웁니다.
             </li>
             <li>
+              <b>접속 통계</b>: 몇 명이 어느 페이지를 보는지 알기 위해 Vercel Web Analytics로 본 페이지 주소, 들어온 경로(referrer), 국가, 브라우저·운영체제·기기
+              종류를 모읍니다. 쿠키를 쓰지 않고, 같은 방문자를 구분하는 값은 하루가 지나면 버려져 누구인지 알 수 없습니다.
+            </li>
+            <li>
               <b>이 브라우저에만 남는 설정</b>: 화면 테마, 닉네임, 🎲 후보, 고른 팀, 내 산책 코스는 브라우저 저장소(localStorage)에만 두며 서버로 보내지
               않습니다.
             </li>
@@ -64,7 +68,7 @@ export default function PrivacyPage() {
         </Section>
 
         <Section title="2. 쓰는 목적">
-          <p>가게 지도와 랭킹, 추첨, 길거리 제보를 보여 주고, 같은 사람의 기록을 이어 주며(로그인하면 다른 기기에서도), 장난성 대량 작성을 막는 데만 씁니다.</p>
+          <p>가게 지도와 랭킹, 추첨, 길거리 제보를 보여 주고, 같은 사람의 기록을 이어 주며(로그인하면 다른 기기에서도), 장난성 대량 작성을 막고, 접속 통계로 얼마나 쓰이는지 보는 데만 씁니다.</p>
           <p>광고, 판매, 프로필 분석에 쓰지 않습니다.</p>
         </Section>
 
@@ -91,7 +95,7 @@ export default function PrivacyPage() {
         <Section title="5. 맡기는 곳 (처리 위탁)">
           <ul className="list-disc space-y-1.5 pl-5">
             <li>Supabase: 데이터베이스와 로그인 처리</li>
-            <li>Vercel: 웹 서비스 호스팅</li>
+            <li>Vercel: 웹 서비스 호스팅과 접속 통계(Web Analytics)</li>
             <li>Google: 구글 로그인(로그인을 고른 경우에만)</li>
             <li>네이버 지도, TMAP: 지도와 도보 경로 표시. 가게·캠퍼스 위치만 보내며 개인정보는 보내지 않습니다.</li>
           </ul>
