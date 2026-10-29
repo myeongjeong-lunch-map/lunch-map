@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { THEME_INIT_SCRIPT } from "@/components/ui/ThemeToggle";
 import "./globals.css";
 
@@ -24,7 +25,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="h-full">{children}</body>
+      <body className="h-full">
+        {children}
+        {/* 접속 통계(방문자 수·페이지 조회 수). 쿠키를 쓰지 않는다. Vercel 대시보드에서 Web Analytics를 켜야 모인다 */}
+        <Analytics />
+      </body>
     </html>
   );
 }
