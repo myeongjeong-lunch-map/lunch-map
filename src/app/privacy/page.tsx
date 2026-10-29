@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 // 개인정보처리방침. 구글 로그인 앱 게시에 필요한 공개 페이지다 (docs/adr/0008).
 // 실제로 저장하는 것과 어긋나지 않게, 저장하는 칸이 바뀌면 이 페이지도 같이 고친다.
 const UPDATED = "2026년 10월 28일";
-const CONTACT = "https://github.com/myeongjeong-lunch-map/lunch-map/issues";
+const CONTACT_EMAIL = "myeongjeongLunchMap@gmail.com";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -50,7 +50,7 @@ export default function PrivacyPage() {
             </li>
             <li>
               <b>남용 방지 기록</b>: 글을 쓸 때 접속 IP를 되돌릴 수 없는 해시값으로 바꿔 시각과 함께 남기고, 짧은 시간에 너무 많이 쓰는지만 확인합니다. IP
-              원문은 저장하지 않습니다.
+              원문은 저장하지 않으며, 이 기록은 30일 뒤 자동으로 지웁니다.
             </li>
             <li>
               <b>이 브라우저에만 남는 설정</b>: 화면 테마, 닉네임, 🎲 후보, 고른 팀, 내 산책 코스는 브라우저 저장소(localStorage)에만 두며 서버로 보내지
@@ -78,6 +78,7 @@ export default function PrivacyPage() {
         <Section title="4. 보관 기간과 삭제">
           <ul className="list-disc space-y-1.5 pl-5">
             <li>직접 남긴 내용은 지도가 운영되는 동안 보관합니다. 평가·키워드·즐겨찾기는 언제든 취소할 수 있습니다.</li>
+            <li>남용 방지 기록(IP 해시와 시각)은 30일이 지나면 매일 자동으로 지웁니다.</li>
             <li>길거리 제보는 시간이 지나거나 확인이 쌓이면 지도에서 내려가며, 기록은 남용 확인을 위해 보관합니다.</li>
             <li>브라우저 ID 쿠키는 브라우저에서 쿠키를 지우면 사라지고, 그 뒤로는 새 ID로 구분합니다.</li>
             <li>
@@ -99,10 +100,10 @@ export default function PrivacyPage() {
         <Section title="6. 문의">
           <p>
             개인정보 관련 문의나 삭제 요청은{" "}
-            <a href={CONTACT} className="font-bold text-brand underline" target="_blank" rel="noreferrer">
-              GitHub 이슈
+            <a href={`mailto:${CONTACT_EMAIL}`} className="font-bold text-brand underline">
+              {CONTACT_EMAIL}
             </a>
-            로 남겨 주세요.
+            로 메일을 보내 주세요.
           </p>
           <p>이 방침이 바뀌면 이 페이지의 시행일을 고치고 내용을 갱신합니다.</p>
         </Section>
