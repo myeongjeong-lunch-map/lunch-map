@@ -141,6 +141,10 @@ npm run dev                  # http://localhost:3000
 
 설정하지 않으면 로그인 버튼만 실패하고(👤 화면에 "로그인하지 못했어요"), 나머지 기능은 그대로 동작한다.
 
+### 접속 통계
+
+방문자 수·페이지 조회 수는 [Vercel Web Analytics](https://vercel.com/docs/analytics)로 본다. 코드(`src/app/layout.tsx`의 `<Analytics />`)는 들어 있고, Vercel 프로젝트마다(dev·운영 각각) 대시보드 → **Analytics** → **Enable**을 한 번 눌러야 모이기 시작한다. 쿠키를 쓰지 않으며, 모으는 항목은 개인정보처리방침(`/privacy`)에 적혀 있다.
+
 ## Claude에 점심 지도 연결하기 (MCP)
 
 점심 지도는 MCP 서버(`/api/mcp`, Streamable HTTP, 읽기 전용, 인증 없음)를 연다. 연결하면 Claude에게 "10분 안에 갈 수 있는 국밥집 추천해 줘", "부캉팀 추첨통에 뭐 들어 있어?"처럼 물어볼 수 있다.
