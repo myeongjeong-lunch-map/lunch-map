@@ -70,7 +70,8 @@ export function LunchMap() {
   const isDesktop = useIsDesktop();
   const { places, myVotes, myKeywords, myFavorites, recentTips, loadError, reload, vote, setKeywords, toggleFavorite, addTip } = usePlaceList();
   const me = useAccount();
-  const [loginFailed, setLoginFailed] = useState(false);
+  // 구글 로그인 실패: null이면 실패 아님, 문자열은 Supabase가 알려 준 이유(모르면 빈 문자열)
+  const [loginFailed, setLoginFailed] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("rank");
   // 고르기 전에는 이벤트 기간이면 할로윈 순위, 아니면 이번 주
   const [pickedPeriod, setPeriod] = useState<RankingPeriod | null>(null);
@@ -133,12 +134,16 @@ export function LunchMap() {
       // 무시
     }
     setTeamIdState(invited ?? saved);
-    // 구글 로그인에 실패하면 /auth/callback이 ?login=failed 로 돌려보낸다
+    // 구글 로그인에 실패하면 /auth/callback이 ?login=failed(&login_error=이유) 로 돌려보낸다.
+    // Supabase가 이유를 #error_description 으로 붙이면 리다이렉트를 거쳐도 남으므로 그것도 읽는다
     const params = new URLSearchParams(location.search);
     if (params.get("login") === "failed") {
-      setLoginFailed(true);
+      const hash = new URLSearchParams(location.hash.slice(1));
+      setLoginFailed(params.get("login_error") ?? hash.get("error_description") ?? "");
       setMode({ kind: "me" });
+      setSnap("full");
       params.delete("login");
+      params.delete("login_error");
       const rest = params.toString();
       history.replaceState(null, "", location.pathname + (rest ? `?${rest}` : ""));
     }
@@ -451,8 +456,11 @@ export function LunchMap() {
           />
         ) : mode.kind === "me" ? (
           <>
-            {loginFailed && (
-              <p className="mx-5 mb-2 rounded-xl bg-danger/15 px-3 py-2.5 text-sm font-bold text-danger">로그인하지 못했어요. 다시 시도해 주세요.</p>
+            {loginFailed !== null && (
+              <div className="mx-5 mb-2 rounded-xl bg-danger/15 px-3 py-2.5 text-sm text-danger">
+                <p className="font-bold">로그인하지 못했어요. 다시 시도해 주세요.</p>
+                {loginFailed && <p className="mt-1 text-xs break-all">이유: {loginFailed}</p>}
+              </div>
             )}
             <MePanel
               key={me.account === undefined ? "loading" : "ready"}
