@@ -18,6 +18,7 @@ import { canPutIntoBox } from "@/lib/drawBox";
 import { isGhost } from "@/lib/halloween";
 import type { PlaceTab } from "@/lib/naverPlaceId";
 import { CATEGORY_COLOR, CATEGORY_EMOJI } from "@/components/place/categoryStyle";
+import { InstagramMenu } from "@/components/place/InstagramMenu";
 import { CategoryDot, Walking } from "@/components/place/PlaceList";
 import { LunchCourseList } from "@/components/walk/LunchCourseList";
 import { useLunchCourses } from "@/components/walk/useLunchCourses";
@@ -56,6 +57,8 @@ type Props = {
   /** 이 가게의 점심 코스(먹고 걷기·포장해서 먹기)를 그리는 데 쓴다 */
   walk: WalkMap;
   onOpenLunch: (course: LunchCourse) => void;
+  /** 가게 정보(인스타 계정 등)를 고친 뒤 목록을 다시 불러온다 */
+  onPlaceChanged: () => void;
 };
 
 export function PlaceDetail({
@@ -79,6 +82,7 @@ export function PlaceDetail({
   halloween = false,
   walk,
   onOpenLunch,
+  onPlaceChanged,
 }: Props) {
   const { courses: lunch } = useLunchCourses(walk, [place], "all");
   const [tips, setTips] = useState<Tip[] | null>(null);
@@ -269,6 +273,7 @@ export function PlaceDetail({
           📋 네이버에서 메뉴·사진 보기 ↗
         </a>
       )}
+      <InstagramMenu place={place} onSaved={onPlaceChanged} />
 
       <h3 className="mt-7 text-lg font-black">이런 점이 좋았어요</h3>
       <ul className="mt-2 space-y-1.5">

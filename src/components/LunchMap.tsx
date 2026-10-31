@@ -517,6 +517,7 @@ export function LunchMap() {
               halloween={halloween}
               walk={walk}
               onOpenLunch={openLunch}
+              onPlaceChanged={() => void reload()}
             />
           </>
         ) : openedLunch ? (
