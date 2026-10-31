@@ -36,7 +36,14 @@ function Pill({ on, onClick, disabled, children }: { on: boolean; onClick: () =>
   );
 }
 
-// 가게 추가: 네이버 장소 검색이 기본, 검색에 없으면 지도에 핀을 직접 꽂는다.
+/** 캠퍼스에서 이 거리(직선)보다 먼 검색 결과는 흐리게 보여 준다. 결과는 서버가 가까운 순으로 준다 */
+const NEAR_METERS = 3000;
+
+function formatMeters(m: number): string {
+  return m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
+}
+
+// 가게 검색(가게 추가): 네이버 장소 검색이 기본, 검색에 없으면 지도에 핀을 직접 꽂는다.
 export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting, onResults, onChosen, mapChoice }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
@@ -131,7 +138,7 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
   return (
     <div className="space-y-5 px-5 pb-28 pt-1">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-black">맛집 추가</h2>
+        <h2 className="text-xl font-black">가게 검색</h2>
         <button onClick={onCancel} className="text-sm font-bold text-muted hover:text-foreground">
           취소
         </button>
@@ -154,10 +161,11 @@ export function AddPlace({ picked, onStartPick, onCancel, onDone, onOpenExisting
                     <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-foreground text-[11px] font-black text-background">
                       {i + 1}
                     </span>
-                    <span className="min-w-0">
+                    <span className={`min-w-0 ${r.meters > NEAR_METERS ? "opacity-55" : ""}`}>
                       <span className="block text-sm font-bold">{r.name}</span>
                       <span className="block text-xs text-muted">
-                        {r.naverCategory} · {r.roadAddress}
+                        {formatMeters(r.meters)}
+                        {r.meters > NEAR_METERS && " (캠퍼스에서 멀어요)"} · {r.naverCategory} · {r.roadAddress}
                       </span>
                     </span>
                   </button>
