@@ -22,7 +22,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-export type SearchResult = { name: string; roadAddress: string; naverCategory: string; lat: number; lng: number };
+/** 가게 검색 결과. meters는 캠퍼스에서의 직선거리 */
+export type SearchResult = { name: string; roadAddress: string; naverCategory: string; lat: number; lng: number; meters: number };
 
 export type PlacesResponse = {
   places: Place[];

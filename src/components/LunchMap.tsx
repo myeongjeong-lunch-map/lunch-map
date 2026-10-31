@@ -315,7 +315,7 @@ export function LunchMap() {
           <div className="flex shrink-0 items-center gap-1.5">
             {!editing && (
               <button onClick={startAdd} className="whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-xs font-bold hover:bg-surface">
-                {/* 좁은 휴대폰에서는 제목이 한 줄에 들어가도록 "+ 추가"로 줄인다 */}+ <span className="max-[400px]:hidden">맛집 </span>추가
+                {/* 좁은 휴대폰에서는 제목이 한 줄에 들어가도록 "🔍 검색"으로 줄인다 */}🔍 <span className="max-[400px]:hidden">가게 </span>검색
               </button>
             )}
             <button
