@@ -40,9 +40,9 @@ type Props = {
   onKeywords: (k: KeywordKey[]) => void;
   onBack: () => void;
   onTipAdded: (tip: Tip) => void;
-  /** 열려 있는 네이버 플레이스 탭 */
-  openTab: PlaceTab | undefined;
-  onOpenTab: (t: PlaceTab) => void;
+  /** 열려 있는 옆 패널: 네이버 플레이스 탭 또는 인스타 오늘의 메뉴 */
+  openTab: PlaceTab | "instagram" | undefined;
+  onOpenTab: (t: PlaceTab | "instagram") => void;
   /** 추첨통이 열려 있는 내 팀들. 비어 있으면 추첨통에 넣기 버튼을 숨긴다. */
   drawTeams: TeamSummary[];
   onAddToBox: (teamId: string) => Promise<void>;
@@ -273,7 +273,7 @@ export function PlaceDetail({
           📋 네이버에서 메뉴·사진 보기 ↗
         </a>
       )}
-      <InstagramMenu place={place} onSaved={onPlaceChanged} />
+      <InstagramMenu place={place} open={openTab === "instagram"} onOpen={() => onOpenTab("instagram")} onSaved={onPlaceChanged} />
 
       <h3 className="mt-7 text-lg font-black">이런 점이 좋았어요</h3>
       <ul className="mt-2 space-y-1.5">
