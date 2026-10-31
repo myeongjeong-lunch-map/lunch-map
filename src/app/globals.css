@@ -205,6 +205,21 @@ body {
   display: none;
 }
 
+/* 이름표가 다른 핀과 겹칠 때 (NaverMap declutterLabels): 아이콘만 */
+.lm-marker.lm-nolabel {
+  padding: 3px;
+  gap: 0;
+}
+.lm-marker.lm-nolabel .label,
+.lm-stall.lm-nolabel .label,
+.lm-stall.lm-nolabel .age {
+  display: none;
+}
+.lm-stall.lm-nolabel {
+  display: block;
+  padding: 3px;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
