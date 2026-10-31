@@ -7,7 +7,7 @@ import { withFreshWalking } from "@/lib/server/walkingStore";
 // voterId를 주면 그 브라우저가 고른 키워드도 같이 돌려준다.
 export async function readPlaceList(voterId: string | null): Promise<{ places: Place[]; myKeywords: Record<string, KeywordKey[]> }> {
   const since = new Date(Date.now() - WEEK_MS).toISOString();
-  const [summaries, keywords, weekLikes, weekTips, eventTips, preorders, toTry] = await Promise.all([
+  const [summaries, keywords, weekLikes, weekTips, eventTips, preorders, toTry, instagrams] = await Promise.all([
     db().from("place_summaries").select("*"),
     db().from("place_keywords").select("place_id, keyword, voter_id"),
     db().from("votes").select("place_id").eq("value", 1).gte("updated_at", since),
@@ -16,10 +16,12 @@ export async function readPlaceList(voterId: string | null): Promise<{ places: P
     // place_summaries 뷰는 새 칸을 모르므로 따로 읽는다. 칸이 없는 옛 DB에서는 모두 미리 주문이 아니다
     db().from("places").select("id").eq("preorder", true),
     db().from("places").select("id").eq("to_try", true),
+    db().from("places").select("id, instagram").not("instagram", "is", null),
   ]);
   for (const r of [summaries, keywords, weekLikes, weekTips, eventTips]) if (r.error) throw r.error;
   const preorderIds = new Set((preorders.data ?? []).map((p) => p.id));
   const toTryIds = new Set((toTry.data ?? []).map((p) => p.id));
+  const instagramOf = new Map((instagrams.data ?? []).map((p) => [p.id as string, p.instagram as string]));
 
   const keywordCounts = new Map<string, Partial<Record<KeywordKey, number>>>();
   const myKeywords: Record<string, KeywordKey[]> = {};
@@ -41,6 +43,7 @@ export async function readPlaceList(voterId: string | null): Promise<{ places: P
     ...withFreshWalking(p),
     preorder: preorderIds.has(p.id),
     to_try: toTryIds.has(p.id) && p.tip_count === 0,
+    instagram: instagramOf.get(p.id) ?? null,
     keywords: keywordCounts.get(p.id) ?? {},
     weekly_score: weeklyScore(recentLikes.get(p.id) ?? 0, recentTips.get(p.id) ?? 0),
     event_tips: eventCount.get(p.id) ?? 0,

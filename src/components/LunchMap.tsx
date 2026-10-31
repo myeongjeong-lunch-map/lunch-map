@@ -26,9 +26,12 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { DrawTab } from "@/components/draw/DrawTab";
 import { MePanel } from "@/components/me/MePanel";
 import { useHalloween } from "@/components/ui/useHalloween";
+import { SeasonDecor } from "@/components/ui/SeasonDecor";
+import { useSeason } from "@/components/ui/useSeason";
 import { useStreetStalls } from "@/components/street/useStreetStalls";
 import { ReportStall, StallDetail, StreetBar, StreetList } from "@/components/street/StreetPanels";
 import { isGhost, TRICK_CHANCE, TRICKS, type Trick } from "@/lib/halloween";
+import { SEASON_DECOR } from "@/lib/season";
 
 const DESKTOP_QUERY = "(min-width: 768px)";
 
@@ -88,6 +91,9 @@ export function LunchMap() {
   // 할로윈 Trick or Treat: 마지막으로 뽑은 가게와 그때 나온 트릭(없으면 트릿)
   const [rolled, setRolled] = useState<{ id: string; trick: Trick | null } | null>(null);
   const halloween = useHalloween();
+  // 계절 꾸미기(늦가을·겨울)는 이벤트 기간이 아닐 때만
+  const rawSeason = useSeason();
+  const season = halloween ? null : rawSeason;
   const street = useStreetStalls();
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
@@ -160,10 +166,11 @@ export function LunchMap() {
   };
 
   useEffect(() => {
-    // 할로윈 테마 색은 <html data-event>로 바꾼다 (globals.css)
-    if (halloween) document.documentElement.dataset.event = "halloween";
+    // 할로윈·계절 테마 색은 <html data-event>로 바꾼다 (globals.css)
+    const event = halloween ? "halloween" : season;
+    if (event) document.documentElement.dataset.event = event;
     else delete document.documentElement.dataset.event;
-  }, [halloween]);
+  }, [halloween, season]);
 
   const all = useMemo(() => places ?? [], [places]);
   const ghosts = useMemo(() => all.filter(isGhost), [all]);
@@ -296,7 +303,7 @@ export function LunchMap() {
         )}
         <div className="flex items-center justify-between gap-2">
           <button onClick={() => setMode({ kind: "browse" })} className="min-w-0 text-left">
-            <p className="truncate text-[11px] font-bold tracking-widest text-brand">{halloween ? "🎃 HAPPY HALLOWEEN" : "MYEONGJEONG LUNCH"}</p>
+            <p className="truncate text-[11px] font-bold tracking-widest text-brand">{halloween ? "🎃 HAPPY HALLOWEEN" : season ? SEASON_DECOR[season].tagline : "MYEONGJEONG LUNCH"}</p>
             <h1 className="whitespace-nowrap text-xl font-black">명정 점심 지도</h1>
           </button>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -348,7 +355,7 @@ export function LunchMap() {
           <button
             onClick={roll}
             disabled={!pool.length}
-            className="mt-3 w-full rounded-2xl bg-brand py-3.5 text-lg font-black text-brand-ink shadow-[0_0_30px_rgba(3,199,90,0.3)] transition active:scale-[0.98] disabled:opacity-40"
+            className="mt-3 w-full rounded-2xl bg-brand py-3.5 text-lg font-black text-brand-ink shadow-[0_0_30px_color-mix(in_srgb,var(--brand)_30%,transparent)] transition active:scale-[0.98] disabled:opacity-40"
           >
             {halloween ? "🍬" : "🎲"}{" "}
             {rolling
@@ -517,6 +524,7 @@ export function LunchMap() {
               halloween={halloween}
               walk={walk}
               onOpenLunch={openLunch}
+              onPlaceChanged={() => void reload()}
             />
           </>
         ) : openedLunch ? (
@@ -627,6 +635,7 @@ export function LunchMap() {
           selectedStallId={mode.kind === "stall" ? mode.id : null}
           onSelectStall={openStall}
         />
+        {season && <SeasonDecor season={season} />}
         {!isDesktop && !pickMode && (
           <BottomSheet snap={snap} onSnap={setSnap}>
             {panel}

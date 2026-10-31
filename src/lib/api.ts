@@ -56,6 +56,8 @@ export const api = {
   setKeywords: (placeId: string, keywords: KeywordKey[]) =>
     request<{ ok: true }>(`/api/places/${placeId}/keywords`, { method: "PUT", body: JSON.stringify({ keywords }) }),
   favorite: (placeId: string, on: boolean) => request<{ ok: true }>(`/api/places/${placeId}/favorite`, { method: "PUT", body: JSON.stringify({ on }) }),
+  setInstagram: (placeId: string, instagram: string, website: string) =>
+    request<{ instagram: string | null }>(`/api/places/${placeId}/instagram`, { method: "PUT", body: JSON.stringify({ instagram, website }) }),
   me: () => request<{ account: Account | null }>("/api/me"),
   saveAccountNickname: (nickname: string) => request<{ ok: true }>("/api/me", { method: "PUT", body: JSON.stringify({ nickname }) }),
   myTips: () => request<{ tips: Tip[] }>("/api/me/tips"),

@@ -37,6 +37,8 @@ export type Place = {
   preorder: boolean;
   /** 가 볼 곳: 아직 안 가 본 채로 등록했고 꿀팁이 하나도 없다. 랭킹·추천에서 빠지고, 첫 꿀팁이 달리면 정식 가게가 된다 */
   to_try: boolean;
+  /** 오늘의 메뉴를 올리는 인스타그램 계정 아이디 (누구나 등록). 없으면 null */
+  instagram: string | null;
   likes: number;
   dislikes: number;
   tip_count: number;
@@ -450,6 +452,23 @@ export function naverMapUrl(place: Pick<Place, "name" | "road_address" | "naver_
   if (place.naver_place_id) return `https://map.naver.com/p/entry/place/${place.naver_place_id}`;
   const district = place.road_address.split(" ").find((w) => /[구군]$/.test(w)) ?? "";
   return `https://map.naver.com/p/search/${encodeURIComponent(`${place.name} ${district}`.trim())}`;
+}
+
+/**
+ * 인스타그램 계정 입력을 아이디로 바꾼다. "@kisa_sikdang", "instagram.com/kisa_sikdang/", 프로필 주소를 모두 받는다.
+ * 빈 입력은 "" (등록 지우기), 아이디 모양이 아니면 null.
+ */
+export function parseInstagramHandle(input: string): string | null {
+  let v = input.trim();
+  if (!v) return "";
+  const url = v.match(/instagram\.com\/([^/?#]+)/i);
+  if (url) v = url[1];
+  v = v.replace(/^@/, "").toLowerCase();
+  return /^[a-z0-9._]{1,30}$/.test(v) ? v : null;
+}
+
+export function instagramUrl(handle: string): string {
+  return `https://www.instagram.com/${handle}/`;
 }
 
 // 네이버 장소 카테고리("음식점>일식>돈가스")를 우리 카테고리로 추정한다.
