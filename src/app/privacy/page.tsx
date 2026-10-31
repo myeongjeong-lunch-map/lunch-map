@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 // 개인정보처리방침. 구글 로그인 앱 게시에 필요한 공개 페이지다 (docs/adr/0008).
 // 실제로 저장하는 것과 어긋나지 않게, 저장하는 칸이 바뀌면 이 페이지도 같이 고친다.
-const UPDATED = "2026년 10월 29일";
+const UPDATED = "2026년 10월 31일";
 const CONTACT_EMAIL = "myeongjeongLunchMap@gmail.com";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -98,6 +98,10 @@ export default function PrivacyPage() {
             <li>Vercel: 웹 서비스 호스팅과 접속 통계(Web Analytics)</li>
             <li>Google: 구글 로그인(로그인을 고른 경우에만)</li>
             <li>네이버 지도, TMAP: 지도와 도보 경로 표시. 가게·캠퍼스 위치만 보내며 개인정보는 보내지 않습니다.</li>
+            <li>
+              인스타그램(Meta): 가게의 「인스타 오늘의 메뉴」를 열면 인스타그램 화면을 불러옵니다. 이때 인스타그램이 자체 쿠키를 쓸 수 있으며, 지도는
+              인스타그램에 개인정보를 보내지 않습니다.
+            </li>
           </ul>
         </Section>
 

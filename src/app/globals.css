@@ -205,6 +205,21 @@ body {
   display: none;
 }
 
+/* 이름표가 다른 핀과 겹칠 때 (NaverMap declutterLabels): 아이콘만 */
+.lm-marker.lm-nolabel {
+  padding: 3px;
+  gap: 0;
+}
+.lm-marker.lm-nolabel .label,
+.lm-stall.lm-nolabel .label,
+.lm-stall.lm-nolabel .age {
+  display: none;
+}
+.lm-stall.lm-nolabel {
+  display: block;
+  padding: 3px;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -273,6 +288,84 @@ body {
   --surface-2: #2c2338;
   --line: #362b45;
   --gold: #ffb347;
+}
+
+/* 계절 꾸미기 (lib/season.ts): 11월 늦가을, 12~2월 겨울에 <html data-event="autumn|winter">이 붙는다 */
+:root[data-event="autumn"] {
+  --brand: #e8590c;
+  --brand-dark: #c84a08;
+  --brand-ink: #fff7ef;
+  --gold: #d98b00;
+}
+:root[data-event="winter"] {
+  --brand: #2f7ff0;
+  --brand-dark: #1c66d1;
+  --brand-ink: #ffffff;
+  --gold: #4aa3ff;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-event="autumn"]:not([data-theme="light"]) {
+    --background: #18140f;
+    --surface: #221c15;
+    --surface-2: #2c241b;
+    --line: #3a3024;
+  }
+  :root[data-event="winter"]:not([data-theme="light"]) {
+    --background: #10151d;
+    --surface: #182030;
+    --surface-2: #202a3c;
+    --line: #2b3850;
+    --gold: #8cc4ff;
+  }
+}
+:root[data-event="autumn"][data-theme="dark"] {
+  --background: #18140f;
+  --surface: #221c15;
+  --surface-2: #2c241b;
+  --line: #3a3024;
+}
+:root[data-event="winter"][data-theme="dark"] {
+  --background: #10151d;
+  --surface: #182030;
+  --surface-2: #202a3c;
+  --line: #2b3850;
+  --gold: #8cc4ff;
+}
+
+/* 지도 위로 떨어지는 낙엽·눈송이 (SeasonDecor) */
+.lm-drop {
+  position: absolute;
+  top: -40px;
+  opacity: 0.85;
+  animation-name: lm-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.lm-drop.winter {
+  color: #fff;
+  text-shadow: 0 0 4px rgba(80, 140, 220, 0.8);
+}
+@keyframes lm-fall {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(24px, 25vh) rotate(60deg);
+  }
+  50% {
+    transform: translate(-12px, 50vh) rotate(140deg);
+  }
+  75% {
+    transform: translate(20px, 75vh) rotate(220deg);
+  }
+  100% {
+    transform: translate(-8px, calc(100vh + 60px)) rotate(300deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lm-season {
+    display: none;
+  }
 }
 
 /* 유령 가게 마커는 둥실둥실 떠다닌다 */

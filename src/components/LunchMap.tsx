@@ -21,14 +21,18 @@ import { useWalkMap } from "@/components/walk/useWalkMap";
 import { PlaceDetail } from "@/components/place/PlaceDetail";
 import { AddPlace } from "@/components/place/AddPlace";
 import { BottomSheet, type SheetSnap } from "@/components/ui/BottomSheet";
+import { InstagramPanel } from "@/components/map/InstagramPanel";
 import { NaverPlacePanel } from "@/components/map/NaverPlacePanel";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { DrawTab } from "@/components/draw/DrawTab";
 import { MePanel } from "@/components/me/MePanel";
 import { useHalloween } from "@/components/ui/useHalloween";
+import { SeasonDecor } from "@/components/ui/SeasonDecor";
+import { useSeason } from "@/components/ui/useSeason";
 import { useStreetStalls } from "@/components/street/useStreetStalls";
 import { ReportStall, StallDetail, StreetBar, StreetList } from "@/components/street/StreetPanels";
 import { isGhost, TRICK_CHANCE, TRICKS, type Trick } from "@/lib/halloween";
+import { SEASON_DECOR } from "@/lib/season";
 
 const DESKTOP_QUERY = "(min-width: 768px)";
 
@@ -50,11 +54,11 @@ const TAB_LABEL: Record<Tab, string> = { rank: "🏆 랭킹", list: "📍 목록
 // 추첨 탭에서 마지막으로 본 팀. 초대 링크(/?team=…)로 들어오면 그 팀을 연다.
 const TEAM_KEY = "lm_team";
 
-// detail.tab: 네이버 플레이스(메뉴·사진·리뷰) 패널이 열려 있으면 그 탭
+// detail.tab: 옆 패널이 열려 있으면 그 탭. 네이버 플레이스(메뉴·사진·리뷰) 또는 인스타 오늘의 메뉴
 // spot: 산책 장소 보기, course: 산책 코스 보기 (courseId가 null이면 내 코스), lunch: 점심 코스 보기
 type Mode =
   | { kind: "browse" }
-  | { kind: "detail"; id: string; tab?: PlaceTab }
+  | { kind: "detail"; id: string; tab?: PlaceTab | "instagram" }
   | { kind: "add" }
   | { kind: "spot"; id: string }
   | { kind: "course"; courseId: string | null }
@@ -88,6 +92,9 @@ export function LunchMap() {
   // 할로윈 Trick or Treat: 마지막으로 뽑은 가게와 그때 나온 트릭(없으면 트릿)
   const [rolled, setRolled] = useState<{ id: string; trick: Trick | null } | null>(null);
   const halloween = useHalloween();
+  // 계절 꾸미기(늦가을·겨울)는 이벤트 기간이 아닐 때만
+  const rawSeason = useSeason();
+  const season = halloween ? null : rawSeason;
   const street = useStreetStalls();
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
@@ -160,10 +167,11 @@ export function LunchMap() {
   };
 
   useEffect(() => {
-    // 할로윈 테마 색은 <html data-event>로 바꾼다 (globals.css)
-    if (halloween) document.documentElement.dataset.event = "halloween";
+    // 할로윈·계절 테마 색은 <html data-event>로 바꾼다 (globals.css)
+    const event = halloween ? "halloween" : season;
+    if (event) document.documentElement.dataset.event = event;
     else delete document.documentElement.dataset.event;
-  }, [halloween]);
+  }, [halloween, season]);
 
   const all = useMemo(() => places ?? [], [places]);
   const ghosts = useMemo(() => all.filter(isGhost), [all]);
@@ -239,7 +247,7 @@ export function LunchMap() {
       setMode((m) => (m.kind === "add" ? m : { kind: "browse" }));
     }
   }, []);
-  const setPlaceTab = (t: PlaceTab | undefined) => setMode((m) => (m.kind === "detail" ? { ...m, tab: t } : m));
+  const setPlaceTab = (t: PlaceTab | "instagram" | undefined) => setMode((m) => (m.kind === "detail" ? { ...m, tab: t } : m));
 
   // 🎲 오늘 뭐 먹지: 후보를 담았으면 그 안에서, 아니면 목록 탭에서 필터를 걸었을 때 그 안에서 고른다
   // 후보로 직접 담은 가게는 그대로, 아니면 가 볼 곳은 빼고 뽑는다
@@ -277,8 +285,13 @@ export function LunchMap() {
     else setMode({ kind: "browse" });
   };
 
+  // 가게 카드 옆 패널 (PC는 오른쪽, 휴대폰은 전체 화면): 네이버 메뉴판·사진·리뷰 또는 인스타 오늘의 메뉴
   const naverPanel =
-    selected?.naver_place_id && placeTab ? (
+    !selected || !placeTab ? null : placeTab === "instagram" ? (
+      selected.instagram ? (
+        <InstagramPanel key={selected.instagram} name={selected.name} handle={selected.instagram} onClose={() => setPlaceTab(undefined)} />
+      ) : null
+    ) : selected.naver_place_id ? (
       <NaverPlacePanel name={selected.name} naverPlaceId={selected.naver_place_id} tab={placeTab} onTab={setPlaceTab} onClose={() => setPlaceTab(undefined)} />
     ) : null;
 
@@ -296,13 +309,13 @@ export function LunchMap() {
         )}
         <div className="flex items-center justify-between gap-2">
           <button onClick={() => setMode({ kind: "browse" })} className="min-w-0 text-left">
-            <p className="truncate text-[11px] font-bold tracking-widest text-brand">{halloween ? "🎃 HAPPY HALLOWEEN" : "MYEONGJEONG LUNCH"}</p>
+            <p className="truncate text-[11px] font-bold tracking-widest text-brand">{halloween ? "🎃 HAPPY HALLOWEEN" : season ? SEASON_DECOR[season].tagline : "MYEONGJEONG LUNCH"}</p>
             <h1 className="whitespace-nowrap text-xl font-black">명정 점심 지도</h1>
           </button>
           <div className="flex shrink-0 items-center gap-1.5">
             {!editing && (
               <button onClick={startAdd} className="whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-xs font-bold hover:bg-surface">
-                {/* 좁은 휴대폰에서는 제목이 한 줄에 들어가도록 "+ 추가"로 줄인다 */}+ <span className="max-[400px]:hidden">맛집 </span>추가
+                {/* 좁은 휴대폰에서는 제목이 한 줄에 들어가도록 "🔍 검색"으로 줄인다 */}🔍 <span className="max-[400px]:hidden">가게 </span>검색
               </button>
             )}
             <button
@@ -348,7 +361,7 @@ export function LunchMap() {
           <button
             onClick={roll}
             disabled={!pool.length}
-            className="mt-3 w-full rounded-2xl bg-brand py-3.5 text-lg font-black text-brand-ink shadow-[0_0_30px_rgba(3,199,90,0.3)] transition active:scale-[0.98] disabled:opacity-40"
+            className="mt-3 w-full rounded-2xl bg-brand py-3.5 text-lg font-black text-brand-ink shadow-[0_0_30px_color-mix(in_srgb,var(--brand)_30%,transparent)] transition active:scale-[0.98] disabled:opacity-40"
           >
             {halloween ? "🍬" : "🎲"}{" "}
             {rolling
@@ -517,6 +530,7 @@ export function LunchMap() {
               halloween={halloween}
               walk={walk}
               onOpenLunch={openLunch}
+              onPlaceChanged={() => void reload()}
             />
           </>
         ) : openedLunch ? (
@@ -627,6 +641,7 @@ export function LunchMap() {
           selectedStallId={mode.kind === "stall" ? mode.id : null}
           onSelectStall={openStall}
         />
+        {season && <SeasonDecor season={season} />}
         {!isDesktop && !pickMode && (
           <BottomSheet snap={snap} onSnap={setSnap}>
             {panel}

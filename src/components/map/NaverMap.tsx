@@ -27,6 +27,26 @@ const ROUTE_DRAW_MS = 700;
 
 type LngLat = [number, number];
 
+/**
+ * 이름표끼리 겹치면 우선순위가 낮은 쪽 이름표를 숨기고 아이콘만 남긴다.
+ * 캠퍼스·직접 꽂은 핀·검색 결과·선택한 핀 → 산책 장소 → 가게 → 노점 순으로 이름표를 지킨다.
+ */
+function declutterLabels(root: HTMLElement) {
+  const items = [...root.querySelectorAll<HTMLElement>(".lm-marker, .lm-stall")];
+  for (const it of items) it.classList.remove("lm-nolabel");
+  const rank = (it: HTMLElement) => (it.matches(".campus, .pick, .candidate, .selected") ? 0 : it.matches(".spot") ? 1 : it.matches(".lm-marker") ? 2 : 3);
+  // 멀리서 볼 때처럼 이미 이름표가 숨은 핀은 건너뛴다 (맨 앞 순위 핀은 이름표 칸이 없어도 자리를 차지한다)
+  const labeled = items
+    .filter((it) => rank(it) === 0 || (it.querySelector(".label")?.getClientRects().length ?? 0) > 0)
+    .sort((a, b) => rank(a) - rank(b));
+  const kept: DOMRect[] = [];
+  for (const it of labeled) {
+    const r = it.getBoundingClientRect();
+    if (kept.some((k) => r.left < k.right && r.right > k.left && r.top < k.bottom && r.bottom > k.top)) it.classList.add("lm-nolabel");
+    else kept.push(r);
+  }
+}
+
 /** 경로를 처음부터 길이 비율 t(0~1)만큼만 자른다. 마지막 점은 구간 사이를 보간한다. */
 function slicePath(path: LngLat[], cum: number[], t: number): LngLat[] {
   const target = cum[cum.length - 1] * t;
@@ -191,6 +211,8 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
         const syncLabels = () => el.current?.classList.toggle("lm-compact", m.getZoom() < LABEL_ZOOM);
         naver.maps.Event.addListener(m, "zoom_changed", syncLabels);
         syncLabels();
+        // 확대·축소가 끝나면 핀 사이 거리가 바뀌므로 겹치는 이름표를 다시 고른다
+        naver.maps.Event.addListener(m, "idle", () => el.current && declutterLabels(el.current));
         naver.maps.Event.addListener(m, "click", (e: any) => {
           const h = handlers.current;
           if (h.pickMode) h.onPick({ lat: e.coord.lat(), lng: e.coord.lng() });
@@ -492,6 +514,14 @@ export function NaverMap({ places, spots, selectedSpotId, onSelectSpot, route, s
       pickMarker.current.setPosition(pos);
     }
   }, [picked, ready]);
+
+  // 핀을 새로 그리면 이름표가 다시 보이므로, 그린 다음 프레임에 겹치는 이름표를 다시 숨긴다
+  useEffect(() => {
+    if (!ready || !el.current) return;
+    const root = el.current;
+    const id = requestAnimationFrame(() => declutterLabels(root));
+    return () => cancelAnimationFrame(id);
+  }, [places, selectedId, halloween, spots, selectedSpotId, route, stalls, selectedStallId, candidates, chosenCandidate, picked, ready]);
 
   return (
     <div className="absolute inset-0">
