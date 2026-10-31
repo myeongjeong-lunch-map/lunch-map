@@ -21,6 +21,7 @@ import { useWalkMap } from "@/components/walk/useWalkMap";
 import { PlaceDetail } from "@/components/place/PlaceDetail";
 import { AddPlace } from "@/components/place/AddPlace";
 import { BottomSheet, type SheetSnap } from "@/components/ui/BottomSheet";
+import { InstagramPanel } from "@/components/map/InstagramPanel";
 import { NaverPlacePanel } from "@/components/map/NaverPlacePanel";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { DrawTab } from "@/components/draw/DrawTab";
@@ -53,11 +54,11 @@ const TAB_LABEL: Record<Tab, string> = { rank: "🏆 랭킹", list: "📍 목록
 // 추첨 탭에서 마지막으로 본 팀. 초대 링크(/?team=…)로 들어오면 그 팀을 연다.
 const TEAM_KEY = "lm_team";
 
-// detail.tab: 네이버 플레이스(메뉴·사진·리뷰) 패널이 열려 있으면 그 탭
+// detail.tab: 옆 패널이 열려 있으면 그 탭. 네이버 플레이스(메뉴·사진·리뷰) 또는 인스타 오늘의 메뉴
 // spot: 산책 장소 보기, course: 산책 코스 보기 (courseId가 null이면 내 코스), lunch: 점심 코스 보기
 type Mode =
   | { kind: "browse" }
-  | { kind: "detail"; id: string; tab?: PlaceTab }
+  | { kind: "detail"; id: string; tab?: PlaceTab | "instagram" }
   | { kind: "add" }
   | { kind: "spot"; id: string }
   | { kind: "course"; courseId: string | null }
@@ -246,7 +247,7 @@ export function LunchMap() {
       setMode((m) => (m.kind === "add" ? m : { kind: "browse" }));
     }
   }, []);
-  const setPlaceTab = (t: PlaceTab | undefined) => setMode((m) => (m.kind === "detail" ? { ...m, tab: t } : m));
+  const setPlaceTab = (t: PlaceTab | "instagram" | undefined) => setMode((m) => (m.kind === "detail" ? { ...m, tab: t } : m));
 
   // 🎲 오늘 뭐 먹지: 후보를 담았으면 그 안에서, 아니면 목록 탭에서 필터를 걸었을 때 그 안에서 고른다
   // 후보로 직접 담은 가게는 그대로, 아니면 가 볼 곳은 빼고 뽑는다
@@ -284,8 +285,13 @@ export function LunchMap() {
     else setMode({ kind: "browse" });
   };
 
+  // 가게 카드 옆 패널 (PC는 오른쪽, 휴대폰은 전체 화면): 네이버 메뉴판·사진·리뷰 또는 인스타 오늘의 메뉴
   const naverPanel =
-    selected?.naver_place_id && placeTab ? (
+    !selected || !placeTab ? null : placeTab === "instagram" ? (
+      selected.instagram ? (
+        <InstagramPanel key={selected.instagram} name={selected.name} handle={selected.instagram} onClose={() => setPlaceTab(undefined)} />
+      ) : null
+    ) : selected.naver_place_id ? (
       <NaverPlacePanel name={selected.name} naverPlaceId={selected.naver_place_id} tab={placeTab} onTab={setPlaceTab} onClose={() => setPlaceTab(undefined)} />
     ) : null;
 

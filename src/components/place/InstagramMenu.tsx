@@ -5,10 +5,10 @@ import { api } from "@/lib/api";
 import { instagramUrl, type Place } from "@/lib/domain";
 
 // 인스타 오늘의 메뉴 (GLOSSARY.md): 오늘의 메뉴를 인스타그램에 올리는 가게는 계정을 등록해 두고 바로 열어 본다.
-// 인스타그램은 남의 계정 최신 글을 가져오는 공식 방법이 없어서, 미리보기는 인스타그램의 프로필 임베드를 그대로 띄운다.
-// 이 임베드는 공식 문서에 없는 주소라 막히면 비어 보일 수 있으므로, 기본은 접어 두고 버튼(새 창·인스타 앱)을 먼저 보여 준다.
-export function InstagramMenu({ place, onSaved }: { place: Place; onSaved: () => void }) {
-  const [preview, setPreview] = useState(false);
+// 「인스타 오늘의 메뉴」를 누르면 네이버 메뉴판처럼 옆 패널(휴대폰은 전체 화면)에 인스타그램 프로필 임베드를 띄운다 (InstagramPanel).
+type Props = { place: Place; open: boolean; onOpen: () => void; onSaved: () => void };
+
+export function InstagramMenu({ place, open, onOpen, onSaved }: Props) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(place.instagram ?? "");
   const [website, setWebsite] = useState("");
@@ -22,7 +22,6 @@ export function InstagramMenu({ place, onSaved }: { place: Place; onSaved: () =>
     try {
       await api.setInstagram(place.id, value, website);
       setEditing(false);
-      setPreview(false);
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "저장하지 못했어요.");
@@ -72,34 +71,17 @@ export function InstagramMenu({ place, onSaved }: { place: Place; onSaved: () =>
 
   return (
     <div className="mt-2">
-      <div className="flex gap-2 text-sm font-bold">
-        <a
-          href={instagramUrl(place.instagram)}
-          target="_blank"
-          rel="noreferrer"
-          className="flex-1 rounded-xl bg-gradient-to-r from-[#f58529] via-[#dd2a7b] to-[#8134af] py-2.5 text-center text-white"
-        >
-          📷 오늘의 메뉴 보기 ↗
-        </a>
-        <button onClick={() => setPreview((v) => !v)} aria-expanded={preview} className="shrink-0 rounded-xl bg-surface-2 px-3 py-2.5 hover:bg-line">
-          {preview ? "접기 ▴" : "미리보기 ▾"}
-        </button>
-      </div>
-      {preview && (
-        <div className="mt-2 overflow-hidden rounded-xl border border-line bg-white">
-          <iframe
-            src={`${instagramUrl(place.instagram)}embed/`}
-            title={`@${place.instagram} 인스타그램`}
-            loading="lazy"
-            className="block h-[520px] w-full"
-          />
-        </div>
-      )}
+      <button
+        onClick={onOpen}
+        aria-pressed={open}
+        className={`w-full rounded-xl py-2.5 text-sm font-bold ${open ? "bg-foreground text-background" : "bg-gradient-to-r from-[#f58529] via-[#dd2a7b] to-[#8134af] text-white"}`}
+      >
+        📷 인스타 오늘의 메뉴
+      </button>
       <p className="mt-1 flex justify-between text-xs text-muted">
-        <span>
-          @{place.instagram}
-          {preview && " · 미리보기가 비어 보이면 위 버튼으로 열어 주세요"}
-        </span>
+        <a href={instagramUrl(place.instagram)} target="_blank" rel="noreferrer" className="font-bold underline">
+          @{place.instagram} 인스타그램에서 열기 ↗
+        </a>
         <button onClick={() => setEditing(true)} className="font-bold underline">
           계정 바꾸기
         </button>
